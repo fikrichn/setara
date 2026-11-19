@@ -10,8 +10,8 @@
   html,
   body {
     font-family: var(--font-sans);
-    background-color: #0B211A;
-    color: #F2F7F4;
+    background-color: #BAE6FD;
+    color: #0D354C;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: contain;
   }
@@ -32,78 +32,137 @@
   text-wrap: balance;
 }
 
-/* Rich Android Game Canvas Background */
+/* Soothing Kid-Friendly Tropical Beach & Ocean Canvas Background */
 .game-canvas-bg {
   background:
-    radial-gradient(circle at 50% 0%, rgba(20, 110, 88, 0.34), transparent 58%),
-    radial-gradient(circle at 85% 90%, rgba(217, 119, 6, 0.14), transparent 45%),
-    #0B211A;
+    radial-gradient(circle at 15% 8%, rgba(254, 240, 138, 0.55), transparent 36%),
+    radial-gradient(circle at 86% 18%, rgba(255, 255, 255, 0.5), transparent 34%),
+    linear-gradient(
+      180deg,
+      #DDF5FF 0%,
+      #BCE8FF 32%,
+      #7ED6F5 62%,
+      #4AC1E8 80%,
+      #F7DEAA 96%,
+      #F2CE8A 100%
+    );
 }
 
-/* Chunky tactile 3D mobile game buttons */
+/* Chunky tactile 3D mobile game buttons — warm coastal palette */
 .game-btn-gold {
-  background: linear-gradient(180deg, #FBBF24 0%, #D97706 100%);
-  color: #161E1B;
-  box-shadow: 0 5px 0 0 #92400E, 0 10px 20px -6px rgba(217, 119, 6, 0.45);
-  border: 1px solid #FDE68A;
+  background: linear-gradient(180deg, #FDE047 0%, #F59E0B 100%);
+  color: #291802;
+  box-shadow: 0 5px 0 0 #B45309, 0 10px 18px -6px rgba(217, 119, 6, 0.42);
+  border: 1.5px solid #FEF08A;
 }
 .game-btn-gold:active {
   transform: translateY(3px);
-  box-shadow: 0 2px 0 0 #92400E, 0 4px 10px -4px rgba(217, 119, 6, 0.35);
+  box-shadow: 0 2px 0 0 #B45309, 0 4px 10px -4px rgba(217, 119, 6, 0.35);
 }
 
 .game-btn-emerald {
-  background: linear-gradient(180deg, #14B8A6 0%, #0F766E 100%);
+  background: linear-gradient(180deg, #2DD4BF 0%, #0284C7 100%);
   color: #FFFFFF;
-  box-shadow: 0 5px 0 0 #094842, 0 10px 20px -6px rgba(15, 118, 110, 0.45);
-  border: 1px solid rgba(153, 246, 228, 0.45);
+  box-shadow: 0 5px 0 0 #075985, 0 10px 18px -6px rgba(2, 132, 199, 0.4);
+  border: 1.5px solid rgba(186, 230, 253, 0.65);
 }
 .game-btn-emerald:active {
   transform: translateY(3px);
-  box-shadow: 0 2px 0 0 #094842, 0 4px 10px -4px rgba(15, 118, 110, 0.35);
+  box-shadow: 0 2px 0 0 #075985, 0 4px 10px -4px rgba(2, 132, 199, 0.32);
 }
 
 .game-btn-wood {
-  background: linear-gradient(180deg, #1B4336 0%, #133127 100%);
-  color: #ECFDF5;
-  box-shadow: 0 4px 0 0 #091B15, 0 8px 16px -6px rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(167, 243, 208, 0.16);
+  background: linear-gradient(180deg, #FFFBF0 0%, #F6E3BC 100%);
+  color: #0D354C;
+  box-shadow: 0 4px 0 0 #C9A263, 0 8px 16px -6px rgba(12, 53, 76, 0.18);
+  border: 1.5px solid #FDECC8;
 }
 .game-btn-wood:active {
   transform: translateY(2px);
-  box-shadow: 0 2px 0 0 #091B15;
+  box-shadow: 0 2px 0 0 #C9A263;
 }
 
+.game-btn-coral {
+  background: linear-gradient(180deg, #FB7185 0%, #E11D48 100%);
+  color: #FFFFFF;
+  box-shadow: 0 5px 0 0 #9F1239, 0 10px 18px -6px rgba(225, 29, 72, 0.38);
+  border: 1.5px solid rgba(254, 205, 211, 0.6);
+}
+.game-btn-coral:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 0 #9F1239;
+}
+
+/* Warm Sunlit Sand & Pearl Game Panel */
 .game-panel {
-  background: linear-gradient(180deg, #14342A 0%, #102A22 100%);
-  border: 1.5px solid rgba(212, 168, 83, 0.28);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.55);
+  background: linear-gradient(180deg, rgba(255, 253, 247, 0.96) 0%, rgba(244, 250, 255, 0.94) 100%);
+  border: 2px solid rgba(125, 211, 252, 0.65);
+  box-shadow: 0 10px 26px -10px rgba(12, 74, 110, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: #0D354C;
+}
+
+/* Coastal Driftwood Balance Board Frame */
+.beach-board-frame {
+  background: linear-gradient(180deg, #1E7599 0%, #145B7B 58%, #0E4763 100%);
+  border: 3px solid #F6CF7D;
+  box-shadow: 0 14px 30px -10px rgba(12, 53, 76, 0.42), inset 0 2px 0 rgba(186, 230, 253, 0.35);
+}
+
+/* Kid-Friendly Range Slider for Settings */
+.beach-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  border-radius: 9999px;
+  background: #CFEBF8;
+  border: 1.5px solid #7DD3FC;
+  outline: none;
+}
+.beach-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FDE047 0%, #F59E0B 100%);
+  border: 2.5px solid #FFFFFF;
+  box-shadow: 0 3px 8px rgba(180, 83, 9, 0.4);
+  cursor: pointer;
+}
+.beach-slider::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FDE047 0%, #F59E0B 100%);
+  border: 2.5px solid #FFFFFF;
+  box-shadow: 0 3px 8px rgba(180, 83, 9, 0.4);
+  cursor: pointer;
 }
 
 /* Tactile carved tile depth */
 .tile-shadow-pos {
-  box-shadow: 0 4px 0 0 #094D46, 0 8px 16px -4px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 0 0 #094D46, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
 }
 .tile-shadow-pos:active {
-  box-shadow: 0 1px 0 0 #094D46, 0 3px 8px -2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 0 0 #094D46, 0 3px 8px -2px rgba(0, 0, 0, 0.22);
 }
 
 .tile-shadow-neg {
-  box-shadow: 0 4px 0 0 #7F1D1D, 0 8px 16px -4px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 0 0 #7F1D1D, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
 }
 .tile-shadow-neg:active {
-  box-shadow: 0 1px 0 0 #7F1D1D, 0 3px 8px -2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 0 0 #7F1D1D, 0 3px 8px -2px rgba(0, 0, 0, 0.22);
 }
 
 .tile-shadow-var {
-  box-shadow: 0 4px 0 0 #92400E, 0 8px 18px -4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 0 0 #92400E, 0 8px 18px -4px rgba(0, 0, 0, 0.32);
 }
 .tile-shadow-var:active {
-  box-shadow: 0 1px 0 0 #92400E, 0 3px 8px -2px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 0 0 #92400E, 0 3px 8px -2px rgba(0, 0, 0, 0.28);
 }
 
 .tile-shadow-group {
-  box-shadow: 0 4px 0 0 #172554, 0 8px 16px -4px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 0 0 #172554, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
 }
 
 .pb-safe {
@@ -114,11 +173,11 @@
 @keyframes hintGlow {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.9);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.95);
   }
   50% {
     transform: scale(1.04);
-    box-shadow: 0 0 0 7px rgba(251, 191, 36, 0.38);
+    box-shadow: 0 0 0 7px rgba(251, 191, 36, 0.42);
   }
 }
 
@@ -224,6 +283,180 @@
   animation: shockwaveRing 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Gentle Ocean Wave Drift */
+@keyframes waveSway {
+  0%, 100% { transform: translateX(0px); }
+  50% { transform: translateX(-22px); }
+}
+.anime-wave-slow {
+  animation: waveSway 7s ease-in-out infinite;
+}
+.anime-wave-mid {
+  animation: waveSway 4.8s ease-in-out infinite reverse;
+}
+
+/* Anime Skeletal Keyframes for Kibo & Bosses */
+@keyframes kiboBreathe {
+  0%, 100% { transform: translateY(0) scaleX(1) scaleY(1); }
+  50% { transform: translateY(-2.5px) scaleX(1.03) scaleY(0.975); }
+}
+.anime-kibo-breathe {
+  animation: kiboBreathe 1.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes kiboSob {
+  0%, 100% { transform: translateY(0) scaleX(1) scaleY(1); }
+  25% { transform: translateY(2px) scaleX(1.03) scaleY(0.96); }
+  50% { transform: translateY(-1px) scaleX(0.98) scaleY(1.02); }
+  75% { transform: translateY(2.5px) scaleX(1.04) scaleY(0.95); }
+}
+.anime-kibo-sob {
+  animation: kiboSob 0.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes tearDrop {
+  0% { opacity: 0; transform: translateY(-2px) scale(0.7); }
+  25% { opacity: 1; transform: translateY(5px) scale(1); }
+  85% { opacity: 0.95; transform: translateY(22px) scale(0.95); }
+  100% { opacity: 0; transform: translateY(28px) scale(0.7); }
+}
+.anime-tear-l {
+  animation: tearDrop 1.05s ease-in infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.anime-tear-r {
+  animation: tearDrop 1.05s ease-in 0.45s infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes kiboTailWag {
+  0%, 100% { transform: rotate(-10deg); }
+  50% { transform: rotate(14deg); }
+}
+.anime-kibo-tail {
+  animation: kiboTailWag 0.85s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+.anime-kibo-tail-fast {
+  animation: kiboTailWag 0.28s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+@keyframes kiboFinWave {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(18deg); }
+}
+.anime-kibo-fin-l {
+  animation: kiboFinWave 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: right top;
+}
+.anime-kibo-fin-r {
+  animation: kiboFinWave 1.4s ease-in-out infinite reverse;
+  transform-box: fill-box;
+  transform-origin: left top;
+}
+
+@keyframes kiboBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.08); }
+}
+.anime-eye-blink {
+  animation: kiboBlink 3.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes kiboStep {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-3px) rotate(-6deg); }
+}
+.anime-foot-l {
+  animation: kiboStep 0.9s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+.anime-foot-r {
+  animation: kiboStep 0.9s ease-in-out 0.45s infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
+@keyframes gearSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.anime-gear-cw {
+  animation: gearSpin 4.5s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.anime-gear-ccw {
+  animation: gearSpin 3.4s linear infinite reverse;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes crownSway {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+.anime-crown-sway {
+  animation: crownSway 1.7s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes phonkBeatBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-4px) scale(1.03, 0.98); }
+}
+.anime-boss-beat {
+  animation: phonkBeatBob 0.44s cubic-bezier(0.25, 0.8, 0.25, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+.anime-boss-enraged {
+  animation: phonkBeatBob 0.36s cubic-bezier(0.25, 0.8, 0.25, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes eqBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.phonk-eq-bar {
+  animation: eqBar var(--bar-dur, 0.44s) ease-in-out var(--bar-delay, 0s) infinite;
+  transform-origin: bottom;
+}
+
+@keyframes floatHeart {
+  0% { opacity: 0; transform: translateY(4px) scale(0.5); }
+  25% { opacity: 1; transform: translateY(-6px) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-28px) scale(0.85); }
+}
+.animate-float-heart {
+  animation: floatHeart 850ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes damageFloat {
+  0% { opacity: 1; transform: translateY(0) scale(0.7); }
+  30% { opacity: 1; transform: translateY(-16px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-40px) scale(1); }
+}
+.animate-damage-float {
+  animation: damageFloat 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-hint-ring,
   .animate-pop-in,
@@ -232,7 +465,28 @@
   .animate-kibo-waddle,
   .animate-bridge-flash,
   .animate-confetti,
-  .animate-shockwave {
+  .animate-shockwave,
+  .anime-wave-slow,
+  .anime-wave-mid,
+  .anime-kibo-breathe,
+  .anime-kibo-sob,
+  .anime-tear-l,
+  .anime-tear-r,
+  .anime-kibo-tail,
+  .anime-kibo-tail-fast,
+  .anime-kibo-fin-l,
+  .anime-kibo-fin-r,
+  .anime-eye-blink,
+  .anime-foot-l,
+  .anime-foot-r,
+  .anime-gear-cw,
+  .anime-gear-ccw,
+  .anime-crown-sway,
+  .anime-boss-beat,
+  .anime-boss-enraged,
+  .phonk-eq-bar,
+  .animate-float-heart,
+  .animate-damage-float {
     animation: none;
   }
 }

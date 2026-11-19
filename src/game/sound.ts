@@ -3,9 +3,19 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   public enabled = true;
+  private volume = 0.85; // 0.0 .. 1.0
+
+  setVolume(vol: number) {
+    this.volume = Math.max(0, Math.min(1, vol));
+    this.enabled = this.volume > 0.01;
+  }
+
+  getVolume() {
+    return this.volume;
+  }
 
   private getContext(): AudioContext | null {
-    if (!this.enabled || typeof window === 'undefined') return null;
+    if (!this.enabled || this.volume <= 0.01 || typeof window === 'undefined') return null;
     if (!this.ctx) {
       const AudioCtx =
         window.AudioContext ||
@@ -23,12 +33,13 @@ class SoundEngine {
     freq: number,
     duration: number,
     type: OscillatorType = 'triangle',
-    volume = 0.14,
+    baseVol = 0.14,
     delay = 0
   ) {
     const ctx = this.getContext();
     if (!ctx) return;
 
+    const scaledVol = Math.max(0.001, baseVol * this.volume);
     const start = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -37,7 +48,7 @@ class SoundEngine {
     osc.frequency.setValueAtTime(freq, start);
 
     gain.gain.setValueAtTime(0.001, start);
-    gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(scaledVol, start + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
 
     osc.connect(gain);
@@ -78,11 +89,63 @@ class SoundEngine {
     this.playTone(196, 0.14, 'sine', 0.1, 0);
   }
 
+  playKiboGiggle() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const notes = [587.33, 783.99, 987.77];
+    notes.forEach((f, i) => {
+      const start = ctx.currentTime + i * 0.06;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, start);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.18, start + 0.065);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.002, 0.13 * this.volume), start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.085);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.09);
+    });
+  }
+
+  playKiboCry() {
+    // Cute gentle descending whimper when player opens Exit Game confirmation
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const cries = [
+      { from: 620, to: 490, delay: 0 },
+      { from: 540, to: 415, delay: 0.19 },
+      { from: 460, to: 350, delay: 0.39 },
+    ];
+    cries.forEach(({ from, to, delay }) => {
+      const start = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(from, start);
+      osc.frequency.exponentialRampToValueAtTime(to, start + 0.16);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.002, 0.12 * this.volume), start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.2);
+    });
+  }
+
+  playBossTaunt() {
+    this.playTone(164.81, 0.12, 'sawtooth', 0.08, 0);
+    this.playTone(146.83, 0.18, 'triangle', 0.11, 0.08);
+  }
+
   playBossHit() {
-    this.playTone(146.83, 0.16, 'sawtooth', 0.11, 0);
-    this.playTone(110, 0.18, 'triangle', 0.14, 0.04);
+    this.playTone(146.83, 0.16, 'sawtooth', 0.12, 0);
+    this.playTone(110, 0.18, 'triangle', 0.15, 0.04);
     this.playTone(587.33, 0.18, 'triangle', 0.12, 0.1);
-    this.playTone(783.99, 0.22, 'sine', 0.12, 0.16);
+    this.playTone(880, 0.22, 'sine', 0.13, 0.16);
   }
 
   playVictory() {
@@ -100,7 +163,6 @@ class SoundEngine {
   }
 
   playHighFive() {
-    // Crisp high-five slap burst + joyful sparkling fanfare
     const ctx = this.getContext();
     if (ctx) {
       const bufferSize = Math.floor(ctx.sampleRate * 0.06);
@@ -115,7 +177,7 @@ class SoundEngine {
       filter.type = 'bandpass';
       filter.frequency.value = 1400;
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.28, ctx.currentTime);
+      gain.gain.setValueAtTime(Math.max(0.002, 0.28 * this.volume), ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
       noise.connect(filter);
       filter.connect(gain);

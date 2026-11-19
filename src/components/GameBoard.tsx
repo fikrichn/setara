@@ -9,11 +9,10 @@ import {
   FlipHorizontal2,
   Lightbulb,
   RotateCcw,
+  Settings,
   Sparkles,
   Star,
   Undo2,
-  Volume2,
-  VolumeX,
   X,
 } from 'lucide-react';
 import {
@@ -27,12 +26,13 @@ import {
   formatTermShort,
   getSmartHint,
   isPureSymbolState,
-  SYMBOL_NAMES,
   transposeCoefficient,
   transposeDenominator,
   transposeTerm,
 } from '../game/algebraEngine';
+import { phonkMusic } from '../game/phonkMusic';
 import { sound } from '../game/sound';
+import { stageMusic } from '../game/stageMusic';
 import {
   EquationState,
   HistoryStep,
@@ -43,18 +43,26 @@ import {
   Term,
   VisualStyle,
 } from '../game/types';
-import { AlgebraTile, DragKind } from './AlgebraTile';
+import {
+  AlgebraTile,
+  DragKind,
+  InlineEquationVisual,
+  InlineTermChip,
+  OperatorCardFace,
+  TileCardFace,
+} from './AlgebraTile';
+import { BeachBackdrop } from './BeachBackdrop';
 import {
   BossArenaBanner,
   KiboAvatar,
   KiboBossCelebration,
+  KiboMood,
   KiboTutorialCard,
 } from './KiboCompanion';
 
 interface GameBoardProps {
   level: LevelDef;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
+  onOpenSettings: () => void;
   onExit: () => void;
   onComplete: (level: LevelDef, moves: number, stars: number) => void;
   onNextLevel: () => void;
@@ -68,6 +76,7 @@ interface ActiveDrag {
   dragKind: DragKind;
   x: number;
   y: number;
+  tilt: number;
   overSide: Side | null;
   combineTargetId: string | null;
   combineIsZero: boolean;
@@ -77,9 +86,16 @@ interface PendingPointer {
   pointerId: number;
   startX: number;
   startY: number;
+  lastX: number;
   term: Term;
   fromSide: Side;
   dragKind: DragKind;
+}
+
+interface OperatorCardMeta {
+  opSymbol: '×' | '÷';
+  valueLabel: string;
+  tone: 'gold' | 'teal';
 }
 
 interface FlyingTileAnim {
@@ -88,17 +104,42 @@ interface FlyingTileAnim {
   fromY: number;
   toX: number;
   toY: number;
-  startLabel: string;
-  endLabel: string;
-  startBg: string;
-  endBg: string;
+  toSide: Side;
+  dragKind: DragKind;
+  visualStyle: VisualStyle;
+  startTerm?: Term;
+  endTerm?: Term;
+  startOp?: OperatorCardMeta;
+  endOp?: OperatorCardMeta;
   bridgeTag: string;
 }
 
+interface BridgeFlashState {
+  tag: string;
+  startTerm?: Term;
+  endTerm?: Term;
+}
+
+interface SparkBurst {
+  id: number;
+  side: Side;
+  color: string;
+  label?: string;
+}
+
+const BOSS_TAUNTS = [
+  'Heh! Cuma begitu saja kemampuan pindah ruasmu?',
+  'Timbanganku tak akan goyah oleh geseran biasa!',
+  'Awas salah tanda waktu melintasi jembatan =!',
+  'Rasakan irama Phonk ini! Coba pisahkan variabelnya!',
+  'Kibo tidak bisa menyelamatkanmu kalau kamu asal tebak!',
+];
+
+const SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
 export const GameBoard: React.FC<GameBoardProps> = ({
   level,
-  soundEnabled,
-  onToggleSound,
+  onOpenSettings,
   onExit,
   onComplete,
   onNextLevel,
@@ -113,7 +154,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const [bossPhaseIndex, setBossPhaseIndex] = useState(0);
   const [bossHitAnim, setBossHitAnim] = useState(false);
+  const [bossStrikeAnim, setBossStrikeAnim] = useState(false);
   const [bossDialogue, setBossDialogue] = useState(level.boss?.introLine ?? '');
+  const bossTauntIdxRef = useRef(0);
 
   const [eqState, setEqState] = useState<EquationState>(initialPhaseState);
   const [undoStack, setUndoStack] = useState<EquationState[]>([]);
@@ -123,6 +166,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       equationText: formatEquation(initialPhaseState, level.defaultVisual === 'pure_symbols'),
       ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
       explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+      stateSnapshot: cloneState(initialPhaseState),
     },
   ]);
 
@@ -131,9 +175,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [feedback, setFeedback] = useState<{ text: string; tone: 'info' | 'warn' | 'good' } | null>(
     null
   );
+  const [kiboMood, setKiboMood] = useState<KiboMood>('idle');
   const [activeHint, setActiveHint] = useState<SmartHint | null>(null);
   const [zeroBurstSide, setZeroBurstSide] = useState<Side | null>(null);
-  const [bridgeFlashTag, setBridgeFlashTag] = useState<string | null>(null);
+  const [sparkBurst, setSparkBurst] = useState<SparkBurst | null>(null);
+  const [landingSide, setLandingSide] = useState<Side | null>(null);
+  const [bridgeFlash, setBridgeFlash] = useState<BridgeFlashState | null>(null);
   const [flyingAnim, setFlyingAnim] = useState<FlyingTileAnim | null>(null);
   const [flyingMidFlipped, setFlyingMidFlipped] = useState(false);
   const [showMobileLog, setShowMobileLog] = useState(false);
@@ -152,10 +199,40 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const leftPanRef = useRef<HTMLDivElement | null>(null);
   const rightPanRef = useRef<HTMLDivElement | null>(null);
   const flyTimerRef = useRef<number[]>([]);
+  const moodTimerRef = useRef<number | null>(null);
+
+  const flashKiboMood = useCallback((nextMood: KiboMood, ms = 1700) => {
+    setKiboMood(nextMood);
+    if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    moodTimerRef.current = window.setTimeout(() => setKiboMood('idle'), ms);
+  }, []);
 
   const clearFlyTimers = useCallback(() => {
     flyTimerRef.current.forEach((id) => window.clearTimeout(id));
     flyTimerRef.current = [];
+  }, []);
+
+  // ALWAYS-ACTIVE MUSIC LIFECYCLE: Tropical Stage Music for regular stages, Drift Phonk for Bosses
+  const totalBossPhases = level.boss?.phases.length ?? 0;
+  const bossCurrentHp = Math.max(0, totalBossPhases - bossPhaseIndex);
+  const phonkActive = isBossLevel && !solvedInfo && bossCurrentHp > 0;
+  const bossIntensity: 'normal' | 'enraged' = bossCurrentHp === 1 ? 'enraged' : 'normal';
+
+  useEffect(() => {
+    if (phonkActive) {
+      stageMusic.stop();
+      phonkMusic.start(bossIntensity);
+    } else {
+      phonkMusic.stop();
+      stageMusic.start();
+    }
+  }, [phonkActive, bossIntensity]);
+
+  useEffect(() => {
+    return () => {
+      phonkMusic.stop();
+      if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -163,6 +240,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     const startEq = cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial);
     setBossPhaseIndex(0);
     setBossHitAnim(false);
+    setBossStrikeAnim(false);
     setBossDialogue(level.boss?.introLine ?? '');
     setEqState(startEq);
     setUndoStack([]);
@@ -172,14 +250,18 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         equationText: formatEquation(startEq, level.defaultVisual === 'pure_symbols'),
         ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
         explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+        stateSnapshot: cloneState(startEq),
       },
     ]);
     setVisualStyle(level.defaultVisual);
     setSelected(null);
     setFeedback(null);
+    setKiboMood('idle');
     setActiveHint(null);
     setZeroBurstSide(null);
-    setBridgeFlashTag(null);
+    setSparkBurst(null);
+    setLandingSide(null);
+    setBridgeFlash(null);
     setFlyingAnim(null);
     setFlyingMidFlipped(false);
     setSolvedInfo(null);
@@ -233,86 +315,98 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       const toX = tr.left + tr.width / 2;
       const toY = tr.top + tr.height / 2;
 
-      let startLabel = '';
-      let endLabel = '';
-      let startBg = 'bg-[#0F766E]';
-      let endBg = 'bg-[#B91C1C]';
+      let startTerm: Term | undefined;
+      let endTerm: Term | undefined;
+      let startOp: OperatorCardMeta | undefined;
+      let endOp: OperatorCardMeta | undefined;
       let bridgeTag = '+ → −';
+      let bridgeStartSym: Term | undefined;
+      let bridgeEndSym: Term | undefined;
 
       if (dragKind === 'coeff') {
         const factor =
           term.kind === 'var' ? term.coeff : term.kind === 'group' ? term.factor : 1;
         const fStr = factor < 0 ? `(−${Math.abs(factor)})` : `${factor}`;
-        startLabel = `×${fStr}`;
-        endLabel = `÷${fStr}`;
-        startBg = 'bg-[#D97706]';
-        endBg = 'bg-[#0F766E]';
+        startOp = { opSymbol: '×', valueLabel: fStr, tone: 'gold' };
+        endOp = { opSymbol: '÷', valueLabel: fStr, tone: 'teal' };
         bridgeTag = `×${fStr} → ÷${fStr}`;
       } else if (dragKind === 'denom' && term.kind === 'var') {
-        startLabel = `÷${term.denom}`;
-        endLabel = `×${term.denom}`;
-        startBg = 'bg-[#D97706]';
-        endBg = 'bg-[#0F766E]';
+        startOp = { opSymbol: '÷', valueLabel: `${term.denom}`, tone: 'gold' };
+        endOp = { opSymbol: '×', valueLabel: `${term.denom}`, tone: 'teal' };
         bridgeTag = `÷${term.denom} → ×${term.denom}`;
       } else if (term.kind === 'sym') {
-        const info = SYMBOL_NAMES[term.family];
-        startLabel = term.sign > 0 ? info.pos : `Lawan ${info.pos}`;
-        endLabel = term.sign > 0 ? `Lawan ${info.pos}` : info.pos;
-        startBg = term.sign > 0 ? 'bg-[#0F766E]' : 'bg-[#B91C1C]';
-        endBg = term.sign > 0 ? 'bg-[#B91C1C]' : 'bg-[#0F766E]';
+        startTerm = { ...term };
+        endTerm = { ...term, sign: term.sign === 1 ? -1 : 1 };
+        bridgeStartSym = startTerm;
+        bridgeEndSym = endTerm;
         bridgeTag = term.sign > 0 ? 'Asli → Lawan' : 'Lawan → Asli';
       } else if (term.kind === 'const') {
-        const oldStr = term.value > 0 ? `+${term.value}` : `−${Math.abs(term.value)}`;
-        const newStr = term.value > 0 ? `−${term.value}` : `+${Math.abs(term.value)}`;
-        startLabel = oldStr;
-        endLabel = newStr;
-        startBg = term.value > 0 ? 'bg-[#0F766E]' : 'bg-[#B91C1C]';
-        endBg = term.value > 0 ? 'bg-[#B91C1C]' : 'bg-[#0F766E]';
+        startTerm = { ...term };
+        endTerm = { ...term, value: -term.value };
         bridgeTag = term.value > 0 ? '+ → −' : '− → +';
       } else if (term.kind === 'var') {
-        startLabel = formatTermShort(term, pureSymbolsMode);
-        const flipped: Term = { ...term, coeff: -term.coeff };
-        endLabel = formatTermShort(flipped, pureSymbolsMode);
-        startBg = 'bg-[#D97706]';
-        endBg = 'bg-[#D97706]';
-        bridgeTag = term.coeff > 0 ? '+x → −x' : '−x → +x';
+        startTerm = { ...term };
+        endTerm =
+          pureSymbolsMode && term.coeff === 1 && term.denom === 1
+            ? { ...term }
+            : { ...term, coeff: -term.coeff };
+        bridgeTag =
+          pureSymbolsMode && term.coeff === 1 && term.denom === 1
+            ? 'Pindah Ruas'
+            : term.coeff > 0
+              ? '+x → −x'
+              : '−x → +x';
       }
 
+      const toSide: Side = fromSide === 'left' ? 'right' : 'left';
       clearFlyTimers();
       setFlyingMidFlipped(false);
-      setBridgeFlashTag(bridgeTag);
+      setBridgeFlash({
+        tag: bridgeTag,
+        startTerm: bridgeStartSym,
+        endTerm: bridgeEndSym,
+      });
       setFlyingAnim({
         id: Date.now(),
         fromX,
         fromY,
         toX,
         toY,
-        startLabel,
-        endLabel,
-        startBg,
-        endBg,
+        toSide,
+        dragKind,
+        visualStyle: pureSymbolsMode ? 'pure_symbols' : visualStyle,
+        startTerm,
+        endTerm,
+        startOp,
+        endOp,
         bridgeTag,
       });
 
-      const t1 = window.setTimeout(() => setFlyingMidFlipped(true), 170);
+      const t1 = window.setTimeout(() => setFlyingMidFlipped(true), 175);
       const t2 = window.setTimeout(() => {
         setFlyingAnim(null);
         setFlyingMidFlipped(false);
-      }, 410);
-      const t3 = window.setTimeout(() => setBridgeFlashTag(null), 680);
+        setLandingSide(toSide);
+      }, 420);
+      const t3 = window.setTimeout(() => {
+        setBridgeFlash(null);
+        setLandingSide(null);
+      }, 760);
       flyTimerRef.current = [t1, t2, t3];
     },
-    [clearFlyTimers, pureSymbolsMode]
+    [clearFlyTimers, pureSymbolsMode, visualStyle]
   );
 
   const commitMove = useCallback(
     (
       result: MoveResult,
       moveKind: 'transpose' | 'combine' | 'expand' | 'flip',
-      flyMeta?: { term: Term; fromSide: Side; dragKind: DragKind; originPoint?: { x: number; y: number } }
+      flyMeta?: { term: Term; fromSide: Side; dragKind: DragKind; originPoint?: { x: number; y: number } },
+      combineSide?: Side
     ) => {
       if (!result.ok || !result.nextState) {
         sound.playNudge();
+        flashKiboMood('oops', 1500);
         setFeedback({
           text: result.errorMessage || 'Langkah ini belum bisa dilakukan.',
           tone: 'warn',
@@ -343,6 +437,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           equationText: formatEquation(nextState, pureSymbolsMode),
           ruleLabel: result.ruleLabel || 'Langkah Aljabar',
           explanation: result.explanation || '',
+          stateSnapshot: cloneState(nextState),
         },
       ]);
 
@@ -353,14 +448,32 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       if (result.cancelledToZero && result.cancelledSide) {
         sound.playZeroCancel();
+        flashKiboMood('excited', 1900);
         setZeroBurstSide(result.cancelledSide);
-        window.setTimeout(() => setZeroBurstSide(null), 600);
+        setSparkBurst({
+          id: Date.now(),
+          side: result.cancelledSide,
+          color: '#FDE68A',
+        });
+        window.setTimeout(() => setZeroBurstSide(null), 650);
+        window.setTimeout(() => setSparkBurst(null), 650);
       } else if (moveKind === 'transpose') {
         sound.playTranspose();
+        flashKiboMood('happy', 1500);
       } else if (moveKind === 'combine') {
         sound.playCombine();
+        flashKiboMood('happy', 1500);
+        if (combineSide) {
+          setSparkBurst({
+            id: Date.now(),
+            side: combineSide,
+            color: '#5EEAD4',
+          });
+          window.setTimeout(() => setSparkBurst(null), 550);
+        }
       } else if (moveKind === 'expand' || moveKind === 'flip') {
         sound.playExpand();
+        flashKiboMood('happy', 1500);
       }
 
       const check = checkSolved(nextState, pureSymbolsMode);
@@ -368,6 +481,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         if (isBossLevel && level.boss) {
           const nextPhaseIdx = bossPhaseIndex + 1;
           const totalPhases = level.boss.phases.length;
+
+          // Fire Golden Energy Strike Beam toward Boss!
+          setBossStrikeAnim(true);
+          flashKiboMood('excited', 2200);
 
           if (nextPhaseIdx < totalPhases) {
             const hitLine =
@@ -380,12 +497,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 text: `Kena telak! ${level.boss!.name} kehilangan 1 HP — siap untuk fase ${nextPhaseIdx + 1}!`,
                 tone: 'good',
               });
-            }, 220);
+            }, 240);
 
             window.setTimeout(() => {
               const nextPhase = level.boss!.phases[nextPhaseIdx];
               const nextFresh = cloneState(nextPhase.initial);
               setBossHitAnim(false);
+              setBossStrikeAnim(false);
               setBossPhaseIndex(nextPhaseIdx);
               setEqState(nextFresh);
               setUndoStack([]);
@@ -397,6 +515,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   equationText: formatEquation(nextFresh, pureSymbolsMode),
                   ruleLabel: nextPhase.label,
                   explanation: nextPhase.tip,
+                  stateSnapshot: cloneState(nextFresh),
                 },
               ]);
             }, 1050);
@@ -407,22 +526,25 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             newTotalMoves <= level.parMoves ? 3 : newTotalMoves <= level.parMoves + 3 ? 2 : 1;
           window.setTimeout(() => {
             sound.playBossHit();
+            phonkMusic.stop();
             setBossHitAnim(true);
             setBossPhaseIndex(totalPhases);
             setBossDialogue(level.boss!.defeatLine);
-          }, 200);
+          }, 220);
 
           window.setTimeout(() => {
             sound.playBossVictory();
             setBossHitAnim(false);
+            setBossStrikeAnim(false);
             setSolvedInfo({ displayResult: check.displayResult as string, stars });
             onComplete(level, newTotalMoves, stars);
-          }, 700);
+          }, 760);
           return;
         }
 
         const stars =
           newTotalMoves <= level.parMoves ? 3 : newTotalMoves <= level.parMoves + 2 ? 2 : 1;
+        flashKiboMood('excited', 2400);
         window.setTimeout(() => {
           sound.playVictory();
           setSolvedInfo({ displayResult: check.displayResult as string, stars });
@@ -440,6 +562,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       bossPhaseIndex,
       triggerFlyAnimation,
       tutorialIndex,
+      flashKiboMood,
     ]
   );
 
@@ -448,16 +571,24 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       if (solvedInfo || bossHitAnim) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
 
+      // Ensure Web Audio unlocks cleanly on mobile touch gesture
+      if (phonkActive) {
+        phonkMusic.start(bossIntensity);
+      } else {
+        stageMusic.start();
+      }
+
       pendingRef.current = {
         pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
+        lastX: e.clientX,
         term,
         fromSide: side,
         dragKind,
       };
     },
-    [solvedInfo, bossHitAnim]
+    [solvedInfo, bossHitAnim, phonkActive, bossIntensity]
   );
 
   useEffect(() => {
@@ -524,6 +655,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         setSelected(null);
       }
 
+      const vx = e.clientX - pending.lastX;
+      pending.lastX = e.clientX;
+      const tilt = Math.max(-13, Math.min(13, vx * 0.65));
+
       const overSide = getPanUnderPoint(e.clientX, e.clientY);
       const combineHit =
         pending.dragKind === 'term'
@@ -536,6 +671,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         dragKind: pending.dragKind,
         x: e.clientX,
         y: e.clientY,
+        tilt,
         overSide,
         combineTargetId: combineHit?.id ?? null,
         combineIsZero: combineHit?.isZero ?? false,
@@ -562,7 +698,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             currentDrag.term.id,
             currentDrag.combineTargetId
           );
-          commitMove(res, 'combine');
+          commitMove(res, 'combine', undefined, currentDrag.fromSide);
         } else if (currentDrag.overSide && currentDrag.overSide !== currentDrag.fromSide) {
           const flyMeta = {
             term: currentDrag.term,
@@ -616,7 +752,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           const firstTerm = eqState[side].find((t) => t.id === selected.termId);
           if (firstTerm && canCombineTerms(firstTerm, term)) {
             const res = combineTerms(eqState, side, firstTerm.id, term.id);
-            commitMove(res, 'combine');
+            commitMove(res, 'combine', undefined, side);
             return;
           }
         }
@@ -675,6 +811,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         equationText: formatEquation(fresh, pureSymbolsMode),
         ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
         explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+        stateSnapshot: cloneState(fresh),
       },
     ]);
     setSelected(null);
@@ -686,8 +823,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const handleHint = () => {
     const hint = getSmartHint(eqState, pureSymbolsMode);
     sound.playPickup();
+    flashKiboMood('thinking', 2500);
     setActiveHint(hint);
     setFeedback({ text: hint.message, tone: 'info' });
+  };
+
+  const handleBossTaunt = () => {
+    const line = BOSS_TAUNTS[bossTauntIdxRef.current % BOSS_TAUNTS.length];
+    bossTauntIdxRef.current += 1;
+    setBossDialogue(line);
   };
 
   const handleFlipBoth = () => {
@@ -707,42 +851,51 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             : 1;
       const fStr = factor < 0 ? `(−${Math.abs(factor)})` : `${factor}`;
       return {
-        label: crossing ? `÷${fStr}` : `×${fStr}`,
+        crossing,
+        op: {
+          opSymbol: (crossing ? '÷' : '×') as '×' | '÷',
+          valueLabel: fStr,
+          tone: (crossing ? 'teal' : 'gold') as 'gold' | 'teal',
+        },
         caption: crossing ? `Lepas → bagi ${fStr}` : 'Tarik ke seberang =',
-        bg: crossing ? 'bg-[#0F766E]' : 'bg-[#D97706]',
       };
     }
 
     if (activeDrag.dragKind === 'denom' && activeDrag.term.kind === 'var') {
       const d = activeDrag.term.denom;
       return {
-        label: crossing ? `×${d}` : `÷${d}`,
+        crossing,
+        op: {
+          opSymbol: (crossing ? '×' : '÷') as '×' | '÷',
+          valueLabel: `${d}`,
+          tone: (crossing ? 'teal' : 'gold') as 'gold' | 'teal',
+        },
         caption: crossing ? `Lepas → kali ${d}` : 'Tarik ke seberang =',
-        bg: crossing ? 'bg-[#0F766E]' : 'bg-[#D97706]',
       };
     }
 
     const t = activeDrag.term;
     if (t.kind === 'sym') {
-      const info = SYMBOL_NAMES[t.family];
-      const nextSign = crossing ? -t.sign : t.sign;
-      const lbl = nextSign > 0 ? info.pos : `Lawan ${info.pos}`;
+      const nextSign: 1 | -1 = crossing ? (t.sign === 1 ? -1 : 1) : t.sign;
+      const previewTerm: Term = { ...t, sign: nextSign };
       return {
-        label: lbl,
+        crossing,
+        term: previewTerm,
         caption: activeDrag.combineTargetId
           ? 'Saling hapus & lenyap!'
           : crossing
-            ? `Pindah → jadi ${lbl}`
+            ? 'Berubah jadi lawan!'
             : 'Geser ke seberang =',
-        bg: nextSign > 0 ? 'bg-[#0F766E]' : 'bg-[#B91C1C]',
       };
     }
 
     if (t.kind === 'const') {
       const val = crossing ? -t.value : t.value;
       const str = val > 0 ? `+${val}` : `−${Math.abs(val)}`;
+      const previewTerm: Term = { ...t, value: val };
       return {
-        label: str,
+        crossing,
+        term: previewTerm,
         caption: activeDrag.combineTargetId
           ? activeDrag.combineIsZero
             ? 'Saling hapus jadi 0!'
@@ -750,16 +903,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           : crossing
             ? `Pindah → jadi ${str}`
             : 'Geser ke seberang =',
-        bg: val > 0 ? 'bg-[#0F766E]' : 'bg-[#B91C1C]',
       };
     }
 
     if (t.kind === 'var') {
       if (pureSymbolsMode && t.coeff === 1 && t.denom === 1) {
         return {
-          label: 'Peti Pusaka',
+          crossing,
+          term: t,
           caption: 'Sisakan Peti sendirian!',
-          bg: 'bg-[#D97706]',
         };
       }
       const nextCoeff = crossing ? -t.coeff : t.coeff;
@@ -767,8 +919,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       const cStr = absC === 1 ? '' : `${absC}`;
       const sign = nextCoeff > 0 ? '+' : '−';
       const str = t.denom > 1 ? `${sign}${cStr}x/${t.denom}` : `${sign}${cStr}x`;
+      const previewTerm: Term = { ...t, coeff: nextCoeff };
       return {
-        label: str,
+        crossing,
+        term: previewTerm,
         caption: activeDrag.combineTargetId
           ? activeDrag.combineIsZero
             ? 'Saling hapus jadi 0!'
@@ -776,11 +930,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           : crossing
             ? `Pindah → jadi ${str}`
             : 'Geser ke seberang =',
-        bg: 'bg-[#D97706]',
       };
     }
 
-    return null;
+    return {
+      crossing,
+      term: t,
+      caption: 'Geser kartu',
+    };
   }, [activeDrag, pureSymbolsMode]);
 
   const beamTilt = useMemo(() => {
@@ -798,27 +955,29 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, [activeHint, activeTutorialStep]);
 
   return (
-    <div className="min-h-[100dvh] flex flex-col game-canvas-bg text-white">
-      {/* ANDROID GAME TOP HUD BAR */}
-      <header className="sticky top-0 z-30 h-14 bg-[#0A1D17]/95 backdrop-blur-md border-b border-[#254E40] px-3 sm:px-5 flex items-center justify-between gap-2.5">
+    <div className="relative min-h-[100dvh] flex flex-col game-canvas-bg text-[#0D354C]">
+      <BeachBackdrop />
+
+      {/* COASTAL ANDROID GAME TOP HUD BAR */}
+      <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/92 backdrop-blur-md border-b-2 border-[#7DD3FC]/55 px-3 sm:px-5 flex items-center justify-between gap-2.5 text-white shadow-md">
         <button
           type="button"
           onClick={onExit}
-          className="game-btn-wood inline-flex items-center justify-center gap-1.5 min-h-[42px] px-3 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap shrink-0 cursor-pointer"
+          className="game-btn-wood inline-flex items-center justify-center gap-1.5 min-h-[42px] px-3 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
           <span>Peta</span>
         </button>
 
         <div className="min-w-0 text-center flex-1">
-          <div className="text-[11px] font-bold text-[#F5C156] truncate">
+          <div className="text-[11px] font-extrabold text-[#FEF08A] truncate">
             {level.isPractice
               ? level.title
               : isBossLevel
                 ? `Bab ${level.chapterId} · Bos Penjaga`
-                : `Bab ${level.chapterId} · Stage ${level.levelNumber}`}
+                : `Bab ${level.chapterId} · Stage ${level.levelNumber}/20`}
           </div>
-          <div className="font-display font-bold text-sm sm:text-base text-white truncate">
+          <div className="font-display font-extrabold text-sm sm:text-base text-white truncate">
             {level.title}
           </div>
         </div>
@@ -828,7 +987,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <button
               type="button"
               onClick={() => setVisualStyle((v) => (v === 'stones' ? 'symbols' : 'stones'))}
-              className="game-btn-wood min-h-[42px] px-2.5 sm:px-3 rounded-xl text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer"
+              className="game-btn-wood min-h-[42px] px-2.5 sm:px-3 rounded-xl text-xs font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
               title="Ubah tampilan antara Batu Alam dan Simbol Aljabar"
             >
               {visualStyle === 'stones' ? 'Batu' : 'Simbol'}
@@ -836,29 +995,32 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           )}
           <button
             type="button"
-            onClick={onToggleSound}
+            onClick={() => {
+              sound.playPickup();
+              onOpenSettings();
+            }}
             className="game-btn-wood min-h-[42px] min-w-[42px] flex items-center justify-center rounded-xl shrink-0 cursor-pointer"
-            aria-label={soundEnabled ? 'Matikan suara' : 'Nyalakan suara'}
+            aria-label="Pengaturan"
+            title="Pengaturan"
           >
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4 text-[#FDE68A]" />
-            ) : (
-              <VolumeX className="w-4 h-4 text-[#7EA396]" />
-            )}
+            <Settings className="w-4.5 h-4.5 text-[#0D354C]" />
           </button>
         </div>
       </header>
 
       {/* MAIN GAME ARENA */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-4 items-start">
+      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-4 items-start">
         <section className="flex flex-col gap-3 min-w-0">
           {/* BOSS BANNER */}
           {isBossLevel && level.boss && (
             <BossArenaBanner
               boss={level.boss}
+              chapterId={level.chapterId}
               phaseIndex={bossPhaseIndex}
               isHit={bossHitAnim}
               dialogue={bossDialogue}
+              phonkActive={phonkActive}
+              onBossTaunt={handleBossTaunt}
             />
           )}
 
@@ -880,41 +1042,53 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           )}
 
           {/* LIVE EQUATION SCOREBOARD BAR */}
-          <div className="rounded-2xl bg-[#112B22] border border-[#2A5848] px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#9EC2B5] tabular-nums">
+          <div className="rounded-2xl game-panel px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#35637A] tabular-nums">
               <span>Langkah {totalMoves}</span>
               <span aria-hidden="true">·</span>
               <span>Target {level.parMoves}</span>
             </div>
             <div
-              className="font-mono font-extrabold text-base sm:text-xl text-[#FDE68A] tracking-tight tabular-nums"
+              className="font-mono font-extrabold text-base sm:text-xl text-[#0284C7] tracking-tight tabular-nums"
               aria-live="polite"
             >
-              {currentEquationText}
+              {pureSymbolsMode ? (
+                <InlineEquationVisual state={eqState} size="sm" />
+              ) : (
+                currentEquationText
+              )}
             </div>
           </div>
 
-          {/* KIBO COMPACT HELPER STRIP */}
+          {/* KIBO COMPACT INTERACTIVE HELPER STRIP */}
           {!activeTutorialStep && (
             <div
-              className={`rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-snug border flex items-center gap-3 transition-colors ${
+              className={`rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-snug border-2 flex items-center gap-3 transition-colors shadow-sm ${
                 feedback?.tone === 'warn'
-                  ? 'bg-[#3D1519] border-[#F87171]/60 text-[#FECACA]'
+                  ? 'bg-[#FFF1F2] border-[#FDA4AF] text-[#9F1239]'
                   : feedback?.tone === 'good'
-                    ? 'bg-[#0F382B] border-[#34D399]/50 text-[#D1FAE5]'
-                    : 'bg-[#143329] border-[#D4A853]/35 text-[#E5F2ED]'
+                    ? 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]'
+                    : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
               }`}
             >
-              <KiboAvatar size="sm" animate={feedback?.tone === 'good'} />
+              <KiboAvatar
+                size="sm"
+                mood={kiboMood}
+                interactive
+                onInteract={(quip) => {
+                  flashKiboMood('giggle', 1300);
+                  setFeedback({ text: quip, tone: 'good' });
+                }}
+              />
               <div className="flex-1 min-w-0">
-                <span className="font-bold text-[11px] text-[#FDE68A] block">Kibo</span>
-                <span>{feedback ? feedback.text : currentTip}</span>
+                <span className="font-extrabold text-[11px] text-[#0284C7] block">Kibo</span>
+                <span className="font-medium">{feedback ? feedback.text : currentTip}</span>
               </div>
               {level.tutorialSteps && level.tutorialSteps.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setTutorialIndex(0)}
-                  className="text-xs font-bold text-[#FDE68A] underline shrink-0 cursor-pointer"
+                  className="text-xs font-extrabold text-[#B45309] underline shrink-0 cursor-pointer"
                 >
                   Panduan
                 </button>
@@ -922,12 +1096,27 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             </div>
           )}
 
-          {/* CARVED TEAKWOOD BALANCE BOARD */}
-          <div className="relative rounded-3xl bg-[#102921] p-3 sm:p-5 border-2 border-[#D4A853]/55 shadow-2xl overflow-hidden">
+          {/* TROPICAL LAGOON & DRIFTWOOD BALANCE BOARD */}
+          <div className="relative rounded-3xl beach-board-frame p-3 sm:p-5 overflow-hidden">
+            {/* GOLDEN ENERGY STRIKE BEAM WHEN BOSS TAKES A HIT */}
+            <AnimatePresence>
+              {bossStrikeAnim && (
+                <motion.div
+                  initial={{ opacity: 0, scaleY: 0.1, y: 120 }}
+                  animate={{ opacity: [0.95, 1, 0], scaleY: [0.2, 1.35, 1.6], y: [100, -40, -140] }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+                  className="pointer-events-none absolute inset-x-0 top-0 bottom-0 z-30 flex justify-center"
+                >
+                  <div className="w-10 sm:w-14 h-full rounded-full bg-gradient-to-t from-transparent via-[#FBBF24] to-[#FEF08A] shadow-[0_0_40px_rgba(251,191,36,0.95)]" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="grid grid-cols-[1fr_52px_1fr] sm:grid-cols-[1fr_76px_1fr] items-center mb-2 px-1">
-              <div className="text-xs font-bold text-[#9EC2B5]">Ruas Kiri</div>
-              <div className="text-center text-[11px] font-extrabold text-[#F5C156]">Setara</div>
-              <div className="text-right text-xs font-bold text-[#9EC2B5]">Ruas Kanan</div>
+              <div className="text-xs font-extrabold text-[#E0F2FE]">Ruas Kiri</div>
+              <div className="text-center text-[11px] font-extrabold text-[#FEF08A]">Setara</div>
+              <div className="text-right text-xs font-extrabold text-[#E0F2FE]">Ruas Kanan</div>
             </div>
 
             <div className="grid grid-cols-[1fr_46px_1fr] sm:grid-cols-[1fr_70px_1fr] gap-1.5 sm:gap-3 items-stretch min-h-[240px] sm:min-h-[300px]">
@@ -935,16 +1124,20 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <div
                 ref={leftPanRef}
                 onClick={() => handlePanClick('left')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 ${
+                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-all duration-150 border-2 overflow-hidden ${
                   activeDrag && activeDrag.fromSide === 'right' && activeDrag.overSide === 'left'
-                    ? 'bg-[#1C4D3D] border-[#FBBF24]'
+                    ? 'bg-[#FEF9C3]/95 border-[#F59E0B] shadow-[inset_0_0_24px_rgba(245,158,11,0.28)]'
                     : selected && selected.side === 'right'
-                      ? 'bg-[#184335] border-[#FBBF24]/65 cursor-pointer'
-                      : 'bg-[#15392E] border-[#285B4A]'
+                      ? 'bg-[#FFFBEB]/95 border-[#FBBF24] cursor-pointer'
+                      : 'bg-[#EBF9FF]/94 border-[#7DD3FC]'
                 }`}
               >
+                {landingSide === 'left' && (
+                  <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border-4 border-[#F59E0B]/80 animate-shockwave" />
+                )}
+
                 {eqState.left.length === 0 ? (
-                  <div className="select-none rounded-2xl border-2 border-dashed border-[#467A69] px-5 py-4 font-display font-bold text-2xl sm:text-3xl text-[#8AB5A6]">
+                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-5 py-4 font-display font-extrabold text-2xl sm:text-3xl text-[#0369A1]">
                     {pureSymbolsMode ? 'Kosong' : '0'}
                   </div>
                 ) : (
@@ -968,49 +1161,115 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   ))
                 )}
 
+                {/* RADIATING SPARK BURST ON MERGE OR ZERO CANCEL */}
+                {sparkBurst?.side === 'left' && (
+                  <div
+                    key={sparkBurst.id}
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center z-20"
+                  >
+                    {SPARK_ANGLES.map((deg) => {
+                      const rad = (deg * Math.PI) / 180;
+                      const tx = Math.cos(rad) * 58;
+                      const ty = Math.sin(rad) * 58;
+                      return (
+                        <motion.span
+                          key={deg}
+                          initial={{ x: 0, y: 0, scale: 1.2, opacity: 1 }}
+                          animate={{ x: tx, y: ty, scale: 0, opacity: 0 }}
+                          transition={{ duration: 0.48, ease: 'easeOut' }}
+                          style={{ backgroundColor: sparkBurst.color }}
+                          className="absolute w-2.5 h-2.5 rounded-full shadow"
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
                 {zeroBurstSide === 'left' && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#FDE68A] drop-shadow">
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
+                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#D97706] drop-shadow">
                       {pureSymbolsMode ? 'Lenyap!' : '0 · Lenyap!'}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* CENTER BRASS BRIDGE (=) */}
-              <div className="relative flex flex-col items-center justify-center select-none">
-                <div className="w-0.5 flex-1 bg-gradient-to-b from-transparent via-[#D4A853]/50 to-[#D4A853]" />
-                <div
-                  style={{ transform: `rotate(${beamTilt}deg)` }}
-                  className={`my-2 w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#FBBF24] to-[#C88617] text-[#11241E] font-display font-extrabold text-3xl sm:text-4xl flex items-center justify-center shadow-lg border-2 border-[#FEF3C7] transition-transform duration-150 ${
-                    bridgeFlashTag ? 'animate-bridge-flash' : ''
-                  }`}
-                  aria-hidden="true"
-                >
-                  =
-                </div>
-                {bridgeFlashTag && (
-                  <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-20 rounded-lg bg-[#FDE68A] text-[#11241E] font-mono font-extrabold text-[11px] px-2 py-0.5 shadow-md whitespace-nowrap animate-pop-in">
-                    {bridgeFlashTag}
+              {/* CENTER BRASS BRIDGE PORTAL (=) */}
+              {(() => {
+                const isCrossingPortal =
+                  !!flyingAnim ||
+                  (!!activeDrag &&
+                    activeDrag.overSide !== null &&
+                    activeDrag.overSide !== activeDrag.fromSide);
+                return (
+                  <div className="relative flex flex-col items-center justify-center select-none">
+                    <div
+                      className={`w-0.5 flex-1 transition-all duration-150 ${
+                        isCrossingPortal
+                          ? 'w-1 bg-gradient-to-b from-transparent via-[#FEF08A] to-[#FBBF24] shadow-[0_0_16px_rgba(251,191,36,0.9)]'
+                          : 'bg-gradient-to-b from-transparent via-[#FDE68A]/70 to-[#FBBF24]'
+                      }`}
+                    />
+                    <div className="relative my-2 flex items-center justify-center">
+                      {isCrossingPortal && (
+                        <div className="pointer-events-none absolute inset-0 -m-2 rounded-2xl border-2 border-[#FEF08A] animate-shockwave" />
+                      )}
+                      <div
+                        style={{
+                          transform: `rotate(${beamTilt}deg) scale(${isCrossingPortal ? 1.14 : 1})`,
+                        }}
+                        className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#FDE047] to-[#F59E0B] text-[#291802] font-display font-extrabold text-3xl sm:text-4xl flex items-center justify-center border-2 border-[#FEF9C3] transition-transform duration-150 ${
+                          isCrossingPortal
+                            ? 'shadow-[0_0_24px_rgba(251,191,36,0.9)]'
+                            : 'shadow-lg'
+                        } ${bridgeFlash ? 'animate-bridge-flash' : ''}`}
+                        aria-hidden="true"
+                      >
+                        =
+                      </div>
+                    </div>
+                    {bridgeFlash && (
+                      <div className="pointer-events-none absolute top-2.5 left-1/2 -translate-x-1/2 z-20 rounded-xl bg-[#FEF08A] text-[#291802] font-mono font-extrabold text-[11px] px-2 py-1 shadow-md whitespace-nowrap animate-pop-in flex items-center gap-1 border border-[#F59E0B]/40">
+                        {bridgeFlash.startTerm && bridgeFlash.endTerm ? (
+                          <>
+                            <InlineTermChip term={bridgeFlash.startTerm} pureSymbols size="xs" />
+                            <span aria-hidden="true">→</span>
+                            <InlineTermChip term={bridgeFlash.endTerm} pureSymbols size="xs" />
+                          </>
+                        ) : (
+                          bridgeFlash.tag
+                        )}
+                      </div>
+                    )}
+                    <div
+                      className={`w-0.5 flex-1 transition-all duration-150 ${
+                        isCrossingPortal
+                          ? 'w-1 bg-gradient-to-t from-transparent via-[#FEF08A] to-[#FBBF24] shadow-[0_0_16px_rgba(251,191,36,0.9)]'
+                          : 'bg-gradient-to-t from-transparent via-[#FDE68A]/70 to-[#FBBF24]'
+                      }`}
+                    />
                   </div>
-                )}
-                <div className="w-0.5 flex-1 bg-gradient-to-t from-transparent via-[#D4A853]/50 to-[#D4A853]" />
-              </div>
+                );
+              })()}
 
               {/* RIGHT PAN */}
               <div
                 ref={rightPanRef}
                 onClick={() => handlePanClick('right')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 ${
+                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-all duration-150 border-2 overflow-hidden ${
                   activeDrag && activeDrag.fromSide === 'left' && activeDrag.overSide === 'right'
-                    ? 'bg-[#1C4D3D] border-[#FBBF24]'
+                    ? 'bg-[#FEF9C3]/95 border-[#F59E0B] shadow-[inset_0_0_24px_rgba(245,158,11,0.28)]'
                     : selected && selected.side === 'left'
-                      ? 'bg-[#184335] border-[#FBBF24]/65 cursor-pointer'
-                      : 'bg-[#15392E] border-[#285B4A]'
+                      ? 'bg-[#FFFBEB]/95 border-[#FBBF24] cursor-pointer'
+                      : 'bg-[#EBF9FF]/94 border-[#7DD3FC]'
                 }`}
               >
+                {landingSide === 'right' && (
+                  <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full border-4 border-[#F59E0B]/80 animate-shockwave" />
+                )}
+
                 {eqState.right.length === 0 ? (
-                  <div className="select-none rounded-2xl border-2 border-dashed border-[#467A69] px-5 py-4 font-display font-bold text-2xl sm:text-3xl text-[#8AB5A6]">
+                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-5 py-4 font-display font-extrabold text-2xl sm:text-3xl text-[#0369A1]">
                     {pureSymbolsMode ? 'Kosong' : '0'}
                   </div>
                 ) : (
@@ -1034,9 +1293,33 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   ))
                 )}
 
+                {/* RADIATING SPARK BURST ON MERGE OR ZERO CANCEL */}
+                {sparkBurst?.side === 'right' && (
+                  <div
+                    key={sparkBurst.id}
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center z-20"
+                  >
+                    {SPARK_ANGLES.map((deg) => {
+                      const rad = (deg * Math.PI) / 180;
+                      const tx = Math.cos(rad) * 58;
+                      const ty = Math.sin(rad) * 58;
+                      return (
+                        <motion.span
+                          key={deg}
+                          initial={{ x: 0, y: 0, scale: 1.2, opacity: 1 }}
+                          animate={{ x: tx, y: ty, scale: 0, opacity: 0 }}
+                          transition={{ duration: 0.48, ease: 'easeOut' }}
+                          style={{ backgroundColor: sparkBurst.color }}
+                          className="absolute w-2.5 h-2.5 rounded-full shadow"
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+
                 {zeroBurstSide === 'right' && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#FDE68A] drop-shadow">
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
+                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#D97706] drop-shadow">
                       {pureSymbolsMode ? 'Lenyap!' : '0 · Lenyap!'}
                     </span>
                   </div>
@@ -1047,12 +1330,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
           {/* CONTEXTUAL TAP-TO-ACT STRIP */}
           {selected && selectedTerm && (
-            <div className="rounded-2xl bg-[#14352B] border-2 border-[#F5C156]/80 p-3 shadow-lg flex flex-wrap items-center justify-between gap-2 animate-pop-in">
-              <div className="text-xs sm:text-sm font-semibold text-[#D6EAE2] pl-1">
-                Dipilih:{' '}
-                <strong className="font-mono text-[#FDE68A]">
-                  {formatTermShort(selectedTerm, pureSymbolsMode)}
-                </strong>
+            <div className="rounded-2xl game-panel border-2 border-[#F59E0B] p-3 shadow-lg flex flex-wrap items-center justify-between gap-2 animate-pop-in">
+              <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1E4E68] pl-1">
+                <span>Dipilih:</span>
+                {pureSymbolsMode ? (
+                  <InlineTermChip term={selectedTerm} pureSymbols size="sm" />
+                ) : (
+                  <strong className="font-mono text-[#B45309]">
+                    {formatTermShort(selectedTerm, pureSymbolsMode)}
+                  </strong>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {selectedTerm.kind !== 'group' && (
@@ -1208,25 +1495,25 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <button
               type="button"
               onClick={() => setShowMobileLog((s) => !s)}
-              className="col-span-4 sm:col-span-1 lg:hidden game-btn-wood flex items-center justify-center gap-2 min-h-[44px] px-3 rounded-xl text-xs sm:text-sm font-bold cursor-pointer"
+              className="col-span-4 sm:col-span-1 lg:hidden game-btn-wood flex items-center justify-center gap-2 min-h-[44px] px-3 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer"
             >
-              <BookOpen className="w-4 h-4 shrink-0 text-[#FDE68A]" aria-hidden="true" />
+              <BookOpen className="w-4 h-4 shrink-0 text-[#0284C7]" aria-hidden="true" />
               <span>{showMobileLog ? 'Tutup Catatan' : `Catatan (${history.length - 1})`}</span>
             </button>
           </div>
         </section>
 
-        {/* RIGHT PANEL: CARVED CATATAN PINDAH RUAS */}
+        {/* RIGHT PANEL: CATATAN PINDAH RUAS */}
         <aside
           className={`${
             showMobileLog ? 'block' : 'hidden'
-          } lg:block rounded-2xl game-panel p-4 sm:p-5`}
+          } lg:block rounded-3xl game-panel p-4 sm:p-5`}
         >
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h2 className="font-display font-bold text-base text-[#FDE68A]">
+          <div className="flex items-center justify-between pb-3 border-b border-[#BAE6FD]">
+            <h2 className="font-display font-extrabold text-base text-[#0D354C]">
               Catatan Langkah
             </h2>
-            <span className="font-mono text-xs text-[#9EC2B5] tabular-nums">
+            <span className="font-mono text-xs font-bold text-[#0284C7] tabular-nums">
               {totalMoves} langkah
             </span>
           </div>
@@ -1235,19 +1522,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             {history.map((step, idx) => (
               <li
                 key={idx}
-                className="pb-3 border-b border-white/10 last:border-b-0 last:pb-0"
+                className="pb-3 border-b border-[#E0F2FE] last:border-b-0 last:pb-0"
               >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono font-bold text-sm text-white tabular-nums">
-                    {step.equationText}
-                  </span>
-                  <span className="text-[11px] font-semibold text-[#8FB5A7] shrink-0">
+                <div className="flex items-center justify-between gap-2">
+                  {pureSymbolsMode && step.stateSnapshot ? (
+                    <InlineEquationVisual state={step.stateSnapshot} size="xs" />
+                  ) : (
+                    <span className="font-mono font-extrabold text-sm text-[#0D354C] tabular-nums">
+                      {step.equationText}
+                    </span>
+                  )}
+                  <span className="text-[11px] font-bold text-[#4B7A91] shrink-0">
                     {idx === 0 ? 'Awal' : `#${idx}`}
                   </span>
                 </div>
-                <p className="mt-1 text-xs font-bold text-[#5EEAD4]">{step.ruleLabel}</p>
+                <p className="mt-1 text-xs font-extrabold text-[#0284C7]">{step.ruleLabel}</p>
                 {step.explanation && (
-                  <p className="mt-0.5 text-xs text-[#C7DDD4] leading-relaxed">
+                  <p className="mt-0.5 text-xs text-[#35637A] leading-relaxed">
                     {step.explanation}
                   </p>
                 )}
@@ -1257,7 +1548,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         </aside>
       </main>
 
-      {/* FLYING ARC TRANSPOSITION ANIMATION OVERLAY */}
+      {/* 3D-FLIPPING PARABOLIC FLYING CARD TRANSPOSITION OVERLAY */}
       <AnimatePresence>
         {flyingAnim && (
           <motion.div
@@ -1267,6 +1558,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               y: flyingAnim.fromY,
               scale: 1,
               rotate: 0,
+              rotateY: 0,
               opacity: 1,
             }}
             animate={{
@@ -1277,42 +1569,73 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               ],
               y: [
                 flyingAnim.fromY,
-                Math.min(flyingAnim.fromY, flyingAnim.toY) - 68,
+                Math.min(flyingAnim.fromY, flyingAnim.toY) - 82,
                 flyingAnim.toY,
               ],
-              scale: [1, 1.24, 0.96],
+              scale: [1, 1.18, 0.96],
               rotate: [0, flyingAnim.toX > flyingAnim.fromX ? 12 : -12, 0],
-              opacity: [1, 1, 0.15],
+              rotateY: [0, 90, 0],
+              opacity: [1, 1, 0.35],
             }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+            style={{ perspective: 900 }}
             className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2"
           >
-            <div
-              className={`px-5 py-3.5 rounded-2xl text-white font-display font-extrabold text-2xl shadow-2xl border-2 border-[#FDE68A] transition-colors duration-100 whitespace-nowrap ${
-                flyingMidFlipped ? flyingAnim.endBg : flyingAnim.startBg
-              }`}
-            >
-              {flyingMidFlipped ? flyingAnim.endLabel : flyingAnim.startLabel}
-            </div>
+            {flyingAnim.dragKind === 'coeff' || flyingAnim.dragKind === 'denom' ? (
+              flyingAnim.startOp &&
+              flyingAnim.endOp && (
+                <OperatorCardFace
+                  opSymbol={flyingMidFlipped ? flyingAnim.endOp.opSymbol : flyingAnim.startOp.opSymbol}
+                  valueLabel={
+                    flyingMidFlipped ? flyingAnim.endOp.valueLabel : flyingAnim.startOp.valueLabel
+                  }
+                  tone={flyingMidFlipped ? flyingAnim.endOp.tone : flyingAnim.startOp.tone}
+                  glowGold
+                />
+              )
+            ) : (
+              flyingAnim.startTerm &&
+              flyingAnim.endTerm && (
+                <TileCardFace
+                  term={flyingMidFlipped ? flyingAnim.endTerm : flyingAnim.startTerm}
+                  visualStyle={flyingAnim.visualStyle}
+                  glowGold
+                />
+              )
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* FLOATING DRAG GHOST */}
+      {/* VELOCITY-TILTED FLOATING DRAG CARD (STAYS A REAL SQUARE CARD & KEEPS SYMBOLS!) */}
       {activeDrag && ghostPreview && (
         <div
           style={{
-            transform: `translate3d(${activeDrag.x}px, ${activeDrag.y}px, 0) translate(-50%, -65%)`,
+            transform: `translate3d(${activeDrag.x}px, ${activeDrag.y}px, 0) translate(-50%, -62%) rotate(${activeDrag.tilt}deg) scale(${
+              ghostPreview.crossing ? 1.08 : 1.03
+            })`,
           }}
-          className="fixed top-0 left-0 z-50 pointer-events-none flex flex-col items-center gap-1.5"
+          className="fixed top-0 left-0 z-50 pointer-events-none flex flex-col items-center gap-1.5 transition-transform duration-75 ease-out"
         >
-          <div
-            className={`px-5 py-3.5 rounded-2xl text-white font-display font-extrabold text-xl sm:text-2xl shadow-2xl border-2 border-white/80 whitespace-nowrap ${ghostPreview.bg}`}
-          >
-            {ghostPreview.label}
-          </div>
-          <span className="rounded-lg bg-[#081712]/95 text-[#FDE68A] text-xs font-bold px-2.5 py-1 shadow-md whitespace-nowrap">
+          {'op' in ghostPreview && ghostPreview.op ? (
+            <OperatorCardFace
+              opSymbol={ghostPreview.op.opSymbol}
+              valueLabel={ghostPreview.op.valueLabel}
+              tone={ghostPreview.op.tone}
+              glowGold={ghostPreview.crossing}
+            />
+          ) : (
+            'term' in ghostPreview &&
+            ghostPreview.term && (
+              <TileCardFace
+                term={ghostPreview.term}
+                visualStyle={pureSymbolsMode ? 'pure_symbols' : visualStyle}
+                glowGold={ghostPreview.crossing}
+              />
+            )
+          )}
+          <span className="rounded-lg bg-[#0D354C]/92 text-[#FEF08A] text-xs font-bold px-2.5 py-1 shadow-md whitespace-nowrap border border-[#7DD3FC]/35">
             {ghostPreview.caption}
           </span>
         </div>
@@ -1326,6 +1649,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           stars={solvedInfo.stars}
           totalMoves={totalMoves}
           displayResult={solvedInfo.displayResult}
+          resultNode={
+            pureSymbolsMode ? <InlineEquationVisual state={eqState} size="sm" /> : undefined
+          }
           hasNextLevel={hasNextLevel}
           onNextLevel={onNextLevel}
           onReplay={handleReset}
@@ -1336,15 +1662,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {/* REGULAR STAGE VICTORY MODAL */}
       {solvedInfo && !isBossLevel && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#061510]/80 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/65 backdrop-blur-xs p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="victory-heading"
         >
-          <div className="w-full max-w-md rounded-3xl game-panel border-2 border-[#5EEAD4]/60 p-6 sm:p-7 text-center text-white animate-pop-in">
+          <div className="w-full max-w-md rounded-3xl game-panel border-3 border-[#38BDF8] p-6 sm:p-7 text-center animate-pop-in shadow-2xl">
             <div className="flex flex-col items-center">
               <div className="mb-3">
-                <KiboAvatar size="lg" animate />
+                <KiboAvatar size="lg" mood="excited" />
               </div>
 
               <div className="flex items-center gap-2 mb-2" aria-label={`${solvedInfo.stars} dari 3 bintang`}>
@@ -1353,42 +1679,54 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                     key={n}
                     className={`w-8 h-8 ${
                       n <= solvedInfo.stars
-                        ? 'text-[#FBBF24] fill-[#FBBF24]'
-                        : 'text-[#315549] fill-[#17352B]'
+                        ? 'text-[#F59E0B] fill-[#FBBF24]'
+                        : 'text-[#CBD5E1] fill-[#E2E8F0]'
                     }`}
                   />
                 ))}
               </div>
 
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#5EEAD4]">
+              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#0284C7]">
                 <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
                 <span>Stage Tuntas · {totalMoves} langkah</span>
               </div>
 
               <h2
                 id="victory-heading"
-                className="mt-1.5 font-display text-2xl sm:text-3xl font-extrabold text-white"
+                className="mt-1.5 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]"
               >
                 {pureSymbolsMode ? 'Peti Pusaka Sendirian!' : 'Hebat! x Ditemukan!'}
               </h2>
 
-              <div className="mt-4 w-full rounded-2xl bg-[#0C231C] border border-[#2D5E4E] py-3.5 px-5">
-                <div className="font-mono font-extrabold text-2xl sm:text-3xl text-[#FDE68A] tabular-nums">
-                  {solvedInfo.displayResult}
-                </div>
-                <p className="mt-1 text-xs text-[#9EC2B5]">
-                  Awal:{' '}
-                  <span className="font-mono font-semibold text-white">
-                    {formatEquation(level.initial, pureSymbolsMode)}
-                  </span>
-                </p>
+              <div className="mt-4 w-full rounded-2xl bg-[#EBF8FF] border-2 border-[#BAE6FD] py-3.5 px-5">
+                {pureSymbolsMode ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <InlineEquationVisual state={eqState} size="md" />
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs font-semibold text-[#35637A]">
+                      <span>Awal:</span>
+                      <InlineEquationVisual state={level.initial} size="xs" />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="font-mono font-extrabold text-2xl sm:text-3xl text-[#0284C7] tabular-nums">
+                      {solvedInfo.displayResult}
+                    </div>
+                    <p className="mt-1 text-xs font-semibold text-[#35637A]">
+                      Awal:{' '}
+                      <span className="font-mono font-extrabold text-[#0D354C]">
+                        {formatEquation(level.initial, pureSymbolsMode)}
+                      </span>
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="mt-6 w-full flex flex-col sm:flex-row gap-2.5">
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="game-btn-wood flex-1 min-h-[48px] px-4 rounded-xl text-sm font-bold whitespace-nowrap cursor-pointer"
+                  className="game-btn-wood flex-1 min-h-[48px] px-4 rounded-xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
                 >
                   Ulangi
                 </button>

@@ -39,6 +39,7 @@ export interface HistoryStep {
   equationText: string;
   ruleLabel: string;
   explanation: string;
+  stateSnapshot?: EquationState;
 }
 
 export interface MoveResult {
@@ -115,4 +116,6 @@ export interface ProgressStore {
   completed: Record<string, LevelProgress>;
   practiceSolved: number;
   soundEnabled: boolean;
+  musicVolume: number; // 0.15 .. 1.0 (cannot be disabled)
+  sfxVolume: number; // 0 .. 1.0
 }

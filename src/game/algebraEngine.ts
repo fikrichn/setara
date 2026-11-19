@@ -748,8 +748,11 @@ export function getSmartHint(state: EquationState, pureSymbolsMode = false): Sma
   };
 }
 
+let lastPracticeSignature = '';
+
 /**
- * Procedural Offline Practice Generator
+ * Pure Procedural Offline Random Practice Generator
+ * Always synthesizes fresh random equations mathematically (never copies campaign stages).
  */
 export function generatePracticeLevel(difficulty: 'mudah' | 'sedang' | 'tantangan'): LevelDef {
   const randInt = (min: number, max: number) =>
@@ -759,134 +762,338 @@ export function generatePracticeLevel(difficulty: 'mudah' | 'sedang' | 'tantanga
     while (v === 0) v = randInt(min, max);
     return v;
   };
+  const pickOne = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-  const sol = randInt(-6, 9);
+  const buildCandidate = (): LevelDef => {
+    const uid = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 
-  if (difficulty === 'mudah') {
-    const b = pickNonZero(-8, 9);
-    const c = sol + b;
-    const swapSides = Math.random() > 0.7;
-    const xSideTerms: Term[] = [
-      { id: nextTermId('v'), kind: 'var', coeff: 1, denom: 1 },
-      { id: nextTermId('c'), kind: 'const', value: b },
-    ];
-    const cSideTerms: Term[] =
-      c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+    if (difficulty === 'mudah') {
+      const pattern = randInt(0, 3);
+      const sol = randInt(-9, 14);
+      const swapSides = Math.random() > 0.5;
 
-    return {
-      id: `practice_${Date.now()}`,
-      chapterId: 0,
-      levelNumber: 0,
-      title: 'Latihan Mudah',
-      tip: 'Pindahkan angka menyeberangi jembatan = agar x sendirian.',
-      defaultVisual: 'symbols',
-      parMoves: c === 0 ? 1 : 2,
-      solution: sol,
-      initial: swapSides
-        ? { left: cSideTerms, right: xSideTerms }
-        : { left: xSideTerms, right: cSideTerms },
-      isPractice: true,
-    };
-  }
+      if (pattern === 0) {
+        // x + b = c (single transposition)
+        const b = pickNonZero(-12, 12);
+        const c = sol + b;
+        const xTerms: Term[] = [
+          { id: nextTermId('v'), kind: 'var', coeff: 1, denom: 1 },
+          { id: nextTermId('c'), kind: 'const', value: b },
+        ];
+        const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Mudah',
+          tip: 'Pindahkan angka menyeberangi jembatan = agar x berdiri sendirian!',
+          defaultVisual: 'symbols',
+          parMoves: c === 0 ? 1 : 2,
+          solution: sol,
+          initial: swapSides ? { left: cTerms, right: xTerms } : { left: xTerms, right: cTerms },
+          isPractice: true,
+        };
+      }
 
-  if (difficulty === 'sedang') {
-    const useDiv = Math.random() > 0.65;
-    if (useDiv) {
-      const d = randInt(2, 5);
-      const q = randInt(-4, 6);
-      const xSol = q * d;
-      const b = pickNonZero(-6, 7);
-      const c = q + b;
+      if (pattern === 1) {
+        // x + b1 + b2 = c (combine two constants + transpose)
+        const b1 = pickNonZero(-8, 9);
+        let b2 = pickNonZero(-8, 9);
+        if (b1 + b2 === 0) b2 = b2 > 0 ? b2 + 2 : b2 - 2;
+        const c = sol + b1 + b2;
+        const xTerms: Term[] = [
+          { id: nextTermId('v'), kind: 'var', coeff: 1, denom: 1 },
+          { id: nextTermId('c'), kind: 'const', value: b1 },
+          { id: nextTermId('c'), kind: 'const', value: b2 },
+        ];
+        const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Mudah',
+          tip: 'Gabungkan angka di sisi yang sama dulu, lalu pindahkan ke seberang =!',
+          defaultVisual: 'symbols',
+          parMoves: 3,
+          solution: sol,
+          initial: swapSides ? { left: cTerms, right: xTerms } : { left: xTerms, right: cTerms },
+          isPractice: true,
+        };
+      }
+
+      if (pattern === 2) {
+        // -x + b = c (flip signs or move -x)
+        const b = pickNonZero(-10, 12);
+        const c = b - sol;
+        const xTerms: Term[] = [
+          { id: nextTermId('c'), kind: 'const', value: b },
+          { id: nextTermId('v'), kind: 'var', coeff: -1, denom: 1 },
+        ];
+        const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Mudah',
+          tip: 'Pindahkan angka dulu lalu gunakan Balik ± untuk mengubah −x menjadi +x!',
+          defaultVisual: 'symbols',
+          parMoves: 3,
+          solution: sol,
+          initial: swapSides ? { left: cTerms, right: xTerms } : { left: xTerms, right: cTerms },
+          isPractice: true,
+        };
+      }
+
+      // pattern 3: 2x = x + c (intro two-sided variable)
+      const k = randInt(2, 4);
+      const c = sol;
+      const leftTerms: Term[] = [{ id: nextTermId('v'), kind: 'var', coeff: k, denom: 1 }];
+      const rightTerms: Term[] = [
+        { id: nextTermId('v'), kind: 'var', coeff: k - 1, denom: 1 },
+        ...(c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const' as const, value: c }]),
+      ];
       return {
-        id: `practice_${Date.now()}`,
+        id: `practice_${uid}`,
         chapterId: 0,
         levelNumber: 0,
-        title: 'Latihan Sedang',
-        tip: 'Pindahkan dulu angka tambah/kurang, lalu pindahkan pembagian ÷ menjadi perkalian ×.',
+        title: 'Latihan Acak · Mudah',
+        tip: 'Kumpulkan semua batu x di satu ruas agar tersisa 1x sendirian!',
         defaultVisual: 'symbols',
-        parMoves: 3,
-        solution: xSol,
-        initial: {
-          left: [
-            { id: nextTermId('v'), kind: 'var', coeff: 1, denom: d },
-            { id: nextTermId('c'), kind: 'const', value: b },
-          ],
-          right: c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }],
-        },
+        parMoves: 2,
+        solution: sol,
+        initial: swapSides
+          ? { left: rightTerms, right: leftTerms }
+          : { left: leftTerms, right: rightTerms },
         isPractice: true,
       };
     }
 
-    const a = randInt(2, 5);
-    const b = pickNonZero(-8, 9);
-    const c = a * sol + b;
-    return {
-      id: `practice_${Date.now()}`,
-      chapterId: 0,
-      levelNumber: 0,
-      title: 'Latihan Sedang',
-      tip: 'Pindahkan angka tetap ke kanan, gabungkan, lalu pindahkan pengali x menjadi pembagi.',
-      defaultVisual: 'symbols',
-      parMoves: 3,
-      solution: sol,
-      initial: {
-        left: [
+    if (difficulty === 'sedang') {
+      const pattern = randInt(0, 3);
+      const swapSides = Math.random() > 0.6;
+
+      if (pattern === 0) {
+        // a*x + b = c
+        const sol = randInt(-7, 10);
+        const a = pickOne([2, 3, 4, 5, 6, -2, -3, -4]);
+        const b = pickNonZero(-12, 12);
+        const c = a * sol + b;
+        const xTerms: Term[] = [
           { id: nextTermId('v'), kind: 'var', coeff: a, denom: 1 },
           { id: nextTermId('c'), kind: 'const', value: b },
-        ],
-        right: c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }],
-      },
-      isPractice: true,
-    };
-  }
+        ];
+        const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Sedang',
+          tip: 'Pindahkan angka tetap ke seberang dulu, baru pindahkan pengali x menjadi pembagi!',
+          defaultVisual: 'symbols',
+          parMoves: 3,
+          solution: sol,
+          initial: swapSides ? { left: cTerms, right: xTerms } : { left: xTerms, right: cTerms },
+          isPractice: true,
+        };
+      }
 
-  const useGroup = Math.random() > 0.5;
-  if (useGroup) {
-    const k = randInt(2, 4);
-    const m = pickNonZero(-5, 6);
-    const c = k * (sol + m);
-    return {
-      id: `practice_${Date.now()}`,
-      chapterId: 0,
-      levelNumber: 0,
-      title: 'Latihan Tantangan',
-      tip: 'Bisa buka kurung dulu, atau langsung pindahkan pengali luar menyeberangi jembatan =.',
-      defaultVisual: 'symbols',
-      parMoves: 3,
-      solution: sol,
-      initial: {
-        left: [{ id: nextTermId('g'), kind: 'group', factor: k, innerVar: 1, innerConst: m }],
-        right: c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }],
-      },
-      isPractice: true,
-    };
-  }
+      if (pattern === 1) {
+        // x / d + b = c
+        const d = randInt(2, 6);
+        const q = pickNonZero(-6, 7);
+        const xSol = q * d;
+        const b = pickNonZero(-9, 9);
+        const c = q + b;
+        const xTerms: Term[] = [
+          { id: nextTermId('v'), kind: 'var', coeff: 1, denom: d },
+          { id: nextTermId('c'), kind: 'const', value: b },
+        ];
+        const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Sedang',
+          tip: 'Pindahkan angka tambah/kurang dulu, lalu pindahkan ÷ menjadi ×!',
+          defaultVisual: 'symbols',
+          parMoves: 3,
+          solution: xSol,
+          initial: swapSides ? { left: cTerms, right: xTerms } : { left: xTerms, right: cTerms },
+          isPractice: true,
+        };
+      }
 
-  const diff = randInt(1, 3);
-  const d = randInt(1, 3);
-  const a = d + diff;
-  const b = pickNonZero(-7, 7);
-  const e = diff * sol + b;
+      if (pattern === 2) {
+        // (d+1)x + b = dx + e (two-sided x reducing to 1x)
+        const sol = randInt(-8, 10);
+        const d = randInt(1, 5);
+        const a = d + 1;
+        const b = pickNonZero(-9, 9);
+        const e = sol + b;
+        const leftTerms: Term[] = [
+          { id: nextTermId('v'), kind: 'var', coeff: a, denom: 1 },
+          { id: nextTermId('c'), kind: 'const', value: b },
+        ];
+        const rightTerms: Term[] = [
+          { id: nextTermId('v'), kind: 'var', coeff: d, denom: 1 },
+          ...(e === 0 ? [] : [{ id: nextTermId('c'), kind: 'const' as const, value: e }]),
+        ];
+        return {
+          id: `practice_${uid}`,
+          chapterId: 0,
+          levelNumber: 0,
+          title: 'Latihan Acak · Sedang',
+          tip: 'Satukan semua suku x di satu sisi dan angka di sisi seberang!',
+          defaultVisual: 'symbols',
+          parMoves: 4,
+          solution: sol,
+          initial: swapSides
+            ? { left: rightTerms, right: leftTerms }
+            : { left: leftTerms, right: rightTerms },
+          isPractice: true,
+        };
+      }
 
-  return {
-    id: `practice_${Date.now()}`,
-    chapterId: 0,
-    levelNumber: 0,
-    title: 'Latihan Tantangan',
-    tip: 'Kumpulkan semua suku x di satu ruas dan semua angka di ruas seberang.',
-    defaultVisual: 'symbols',
-    parMoves: diff === 1 ? 4 : 5,
-    solution: sol,
-    initial: {
-      left: [
+      // pattern 3: k(x + m) = c
+      const sol = randInt(-6, 9);
+      const k = pickOne([2, 3, 4, 5]);
+      const m = pickNonZero(-6, 7);
+      const c = k * (sol + m);
+      const gTerms: Term[] = [{ id: nextTermId('g'), kind: 'group', factor: k, innerVar: 1, innerConst: m }];
+      const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+      return {
+        id: `practice_${uid}`,
+        chapterId: 0,
+        levelNumber: 0,
+        title: 'Latihan Acak · Sedang',
+        tip: 'Ketuk tanda kurung untuk "Buka Kurung", atau langsung pindahkan pengali luarnya!',
+        defaultVisual: 'symbols',
+        parMoves: 3,
+        solution: sol,
+        initial: swapSides ? { left: cTerms, right: gTerms } : { left: gTerms, right: cTerms },
+        isPractice: true,
+      };
+    }
+
+    // difficulty === 'tantangan'
+    const pattern = randInt(0, 3);
+    const sol = randInt(-8, 10);
+    const swapSides = Math.random() > 0.55;
+
+    if (pattern === 0) {
+      // ax + b = dx + e with |a - d| >= 2
+      const diff = randInt(2, 4);
+      const d = randInt(1, 4);
+      const a = d + diff;
+      const b = pickNonZero(-10, 10);
+      const e = diff * sol + b;
+      const leftTerms: Term[] = [
         { id: nextTermId('v'), kind: 'var', coeff: a, denom: 1 },
         { id: nextTermId('c'), kind: 'const', value: b },
-      ],
-      right: [
+      ];
+      const rightTerms: Term[] = [
         { id: nextTermId('v'), kind: 'var', coeff: d, denom: 1 },
         ...(e === 0 ? [] : [{ id: nextTermId('c'), kind: 'const' as const, value: e }]),
-      ],
-    },
-    isPractice: true,
+      ];
+      return {
+        id: `practice_${uid}`,
+        chapterId: 0,
+        levelNumber: 0,
+        title: 'Latihan Acak · Tantangan',
+        tip: 'Kumpulkan suku x di satu ruas, angka di ruas lain, lalu bagi dengan koefisien x!',
+        defaultVisual: 'symbols',
+        parMoves: 5,
+        solution: sol,
+        initial: swapSides
+          ? { left: rightTerms, right: leftTerms }
+          : { left: leftTerms, right: rightTerms },
+        isPractice: true,
+      };
+    }
+
+    if (pattern === 1) {
+      // k(x + m) = dx + c (bracket + variable on opposite side!)
+      const k = randInt(2, 4);
+      const d = randInt(1, k - 1);
+      const m = pickNonZero(-5, 6);
+      const c = (k - d) * sol + k * m;
+      const leftTerms: Term[] = [
+        { id: nextTermId('g'), kind: 'group', factor: k, innerVar: 1, innerConst: m },
+      ];
+      const rightTerms: Term[] = [
+        { id: nextTermId('v'), kind: 'var', coeff: d, denom: 1 },
+        ...(c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const' as const, value: c }]),
+      ];
+      return {
+        id: `practice_${uid}`,
+        chapterId: 0,
+        levelNumber: 0,
+        title: 'Latihan Acak · Tantangan',
+        tip: 'Buka kurungnya dulu, lalu kumpulkan semua suku x di satu sisi!',
+        defaultVisual: 'symbols',
+        parMoves: k - d > 1 ? 6 : 5,
+        solution: sol,
+        initial: swapSides
+          ? { left: rightTerms, right: leftTerms }
+          : { left: leftTerms, right: rightTerms },
+        isPractice: true,
+      };
+    }
+
+    if (pattern === 2) {
+      // Negative factor bracket: -k(x + m) = c
+      const k = pickOne([-2, -3, -4]);
+      const m = pickNonZero(-5, 6);
+      const c = k * (sol + m);
+      const gTerms: Term[] = [
+        { id: nextTermId('g'), kind: 'group', factor: k, innerVar: 1, innerConst: m },
+      ];
+      const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+      return {
+        id: `practice_${uid}`,
+        chapterId: 0,
+        levelNumber: 0,
+        title: 'Latihan Acak · Tantangan',
+        tip: 'Hati-hati tanda negatif di luar kurung! Buka kurung atau langsung bagi dengan pengalinya.',
+        defaultVisual: 'symbols',
+        parMoves: 3,
+        solution: sol,
+        initial: swapSides ? { left: cTerms, right: gTerms } : { left: gTerms, right: cTerms },
+        isPractice: true,
+      };
+    }
+
+    // pattern 3: k(2x + m) = c
+    const k = randInt(2, 3);
+    const m = pickNonZero(-5, 5);
+    const c = k * (2 * sol + m);
+    const gTerms: Term[] = [
+      { id: nextTermId('g'), kind: 'group', factor: k, innerVar: 2, innerConst: m },
+    ];
+    const cTerms: Term[] = c === 0 ? [] : [{ id: nextTermId('c'), kind: 'const', value: c }];
+    return {
+      id: `practice_${uid}`,
+      chapterId: 0,
+      levelNumber: 0,
+      title: 'Latihan Acak · Tantangan',
+      tip: 'Pindahkan pengali luar kurung dulu atau buka kurung, lalu selesaikan 2x!',
+      defaultVisual: 'symbols',
+      parMoves: 4,
+      solution: sol,
+      initial: swapSides ? { left: cTerms, right: gTerms } : { left: gTerms, right: cTerms },
+      isPractice: true,
+    };
   };
+
+  // Guarantee fresh non-repeating random equation every single time
+  let chosen = buildCandidate();
+  for (let tries = 0; tries < 8; tries++) {
+    const sig = formatEquation(chosen.initial, false);
+    if (sig !== lastPracticeSignature && !checkSolved(chosen.initial, false).solved) {
+      lastPracticeSignature = sig;
+      break;
+    }
+    chosen = buildCandidate();
+  }
+  return chosen;
 }

@@ -1,4 +1,4 @@
-import { ChapterDef, SymbolFamily, Term } from './types';
+import { ChapterDef, EquationState, LevelDef, SymbolFamily, Term } from './types';
 
 const c = (id: string, value: number): Term => ({ id, kind: 'const', value });
 const v = (id: string, coeff = 1, denom = 1): Term => ({ id, kind: 'var', coeff, denom });
@@ -19,13 +19,904 @@ const sym = (id: string, family: SymbolFamily, sign: 1 | -1 = 1): Term => ({
 const BOSS_TURTLE_ART = '/src/assets/images/boss_penjaga_batu_1795080568852.jpg';
 const BOSS_OWL_ART = '/src/assets/images/boss_raja_timbangan_1795080569789.jpg';
 
+// =========================================================================
+// CLEAN STRUCTURED STAGE BUILDERS (20 STAGES PER CHAPTER = 120 TOTAL)
+// Every single stage is mathematically verified for exact integer solutions.
+// =========================================================================
+
+type SymPair = [SymbolFamily, 1 | -1];
+
+function buildBab0ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    petiSide: 'left' | 'right';
+    petiExtras: SymPair[];
+    otherExtras: SymPair[];
+  }> = [
+    {
+      num: 5,
+      title: 'Pasangan Kerang & Lawan',
+      tip: 'Gabungkan Kerang dan Lawan Kerang di kiri, lalu pindahkan sisanya!',
+      par: 1,
+      petiSide: 'left',
+      petiExtras: [['shell', 1], ['shell', -1]],
+      otherExtras: [['sun', 1], ['leaf', 1]],
+    },
+    {
+      num: 6,
+      title: 'Kerang Menyeberang Pantai',
+      tip: 'Tarik Kerang dari kiri ke kanan (jadi Lawan Kerang) lalu hapus pasangannya!',
+      par: 2,
+      petiSide: 'left',
+      petiExtras: [['shell', 1]],
+      otherExtras: [['leaf', 1], ['shell', 1]],
+    },
+    {
+      num: 7,
+      title: 'Lawan Surya Pulang',
+      tip: 'Pindahkan Lawan Surya ke kanan agar berubah menjadi Surya asli!',
+      par: 1,
+      petiSide: 'left',
+      petiExtras: [['sun', -1]],
+      otherExtras: [['shell', 1], ['leaf', 1]],
+    },
+    {
+      num: 8,
+      title: 'Peti di Dermaga Kanan',
+      tip: 'Tarik Daun dari kanan ke kiri, lalu hapuskan dengan pasangannya!',
+      par: 2,
+      petiSide: 'right',
+      petiExtras: [['leaf', 1]],
+      otherExtras: [['sun', 1], ['leaf', 1]],
+    },
+    {
+      num: 9,
+      title: 'Dua Pasangan Saling Hapus',
+      tip: 'Hapus dulu pasangan Surya & Lawan Surya di kiri, lalu pindahkan Kerang!',
+      par: 2,
+      petiSide: 'left',
+      petiExtras: [['sun', 1], ['sun', -1], ['shell', -1]],
+      otherExtras: [['leaf', 1]],
+    },
+    {
+      num: 10,
+      title: 'Jembatan Dua Simbol',
+      tip: 'Pindahkan Surya dan Daun dari sisi Peti ke ruas kanan satu per satu.',
+      par: 3,
+      petiSide: 'left',
+      petiExtras: [['sun', 1], ['leaf', 1]],
+      otherExtras: [['shell', 1], ['sun', 1]],
+    },
+    {
+      num: 11,
+      title: 'Ombak Lawan Kerang',
+      tip: 'Pindahkan Lawan Kerang ke ruas kiri agar menjadi Kerang asli dan hapus dengan Lawan Kerang!',
+      par: 2,
+      petiSide: 'right',
+      petiExtras: [['shell', -1]],
+      otherExtras: [['sun', 1], ['shell', -1]],
+    },
+    {
+      num: 12,
+      title: 'Tiga Batu di Kiri',
+      tip: 'Hapus pasangan Daun di kiri dulu, lalu pindahkan Surya ke kanan!',
+      par: 3,
+      petiSide: 'left',
+      petiExtras: [['leaf', 1], ['leaf', -1], ['sun', 1]],
+      otherExtras: [['shell', 1], ['sun', 1]],
+    },
+    {
+      num: 13,
+      title: 'Peti di Pulau Kanan',
+      tip: 'Pindahkan Kerang dan Lawan Daun dari kanan ke kiri, lalu rapikan pasangannya!',
+      par: 3,
+      petiSide: 'right',
+      petiExtras: [['shell', 1], ['leaf', -1]],
+      otherExtras: [['shell', 1], ['sun', 1]],
+    },
+    {
+      num: 14,
+      title: 'Batu Ganda Sejenis',
+      tip: 'Pindahkan kedua batu Surya dari kiri ke kanan, lalu hapuskan dengan Surya di kanan!',
+      par: 4,
+      petiSide: 'left',
+      petiExtras: [['sun', 1], ['sun', 1]],
+      otherExtras: [['sun', 1], ['shell', 1], ['sun', 1]],
+    },
+    {
+      num: 15,
+      title: 'Hapus di Dua Ruas',
+      tip: 'Hapus pasangan lawan yang sudah ada di kanan, lalu pindahkan batu dari sisi Peti!',
+      par: 3,
+      petiSide: 'left',
+      petiExtras: [['leaf', -1], ['shell', 1]],
+      otherExtras: [['sun', 1], ['sun', -1], ['shell', 1]],
+    },
+    {
+      num: 16,
+      title: 'Tukar Simbol Kembar',
+      tip: 'Pindahkan Daun dan Kerang dari kanan ke kiri, lalu hilangkan pasangan yang berlawanan!',
+      par: 4,
+      petiSide: 'right',
+      petiExtras: [['leaf', 1], ['shell', 1]],
+      otherExtras: [['leaf', 1], ['shell', 1], ['sun', 1]],
+    },
+    {
+      num: 17,
+      title: 'Lawan Ganda Pantai',
+      tip: 'Seberangkan Lawan Surya dan Lawan Daun ke kanan, lalu hapus pasangan lawannya!',
+      par: 4,
+      petiSide: 'left',
+      petiExtras: [['sun', -1], ['leaf', -1]],
+      otherExtras: [['sun', -1], ['leaf', -1], ['shell', 1]],
+    },
+    {
+      num: 18,
+      title: 'Simbol Berantai',
+      tip: 'Hapus pasangan Kerang dulu di kanan, baru pindahkan Surya dan Daun ke kiri!',
+      par: 4,
+      petiSide: 'right',
+      petiExtras: [['shell', 1], ['shell', -1], ['sun', 1], ['leaf', -1]],
+      otherExtras: [['sun', 1], ['shell', 1]],
+    },
+    {
+      num: 19,
+      title: 'Gerbang Sebelum Bos Simbol',
+      tip: 'Pindahkan semua simbol dari sisi Peti dan bersihkan setiap pasangan lawan di ruas seberang!',
+      par: 5,
+      petiSide: 'left',
+      petiExtras: [['sun', 1], ['shell', -1], ['leaf', 1]],
+      otherExtras: [['sun', 1], ['shell', -1], ['leaf', 1], ['sun', 1]],
+    },
+  ];
+
+  return specs.map((s) => {
+    const pTerms: Term[] = [
+      v(`b0s${s.num}_p`, 1),
+      ...s.petiExtras.map(([fam, sign], i) => sym(`b0s${s.num}_pe${i}`, fam, sign)),
+    ];
+    const oTerms: Term[] = s.otherExtras.map(([fam, sign], i) =>
+      sym(`b0s${s.num}_oe${i}`, fam, sign)
+    );
+    return {
+      id: `0-${s.num}`,
+      chapterId: 0,
+      levelNumber: s.num,
+      title: s.title,
+      tip: s.tip,
+      defaultVisual: 'pure_symbols',
+      parMoves: s.par,
+      initial: s.petiSide === 'left' ? { left: pTerms, right: oTerms } : { left: oTerms, right: pTerms },
+    };
+  });
+}
+
+function buildBab1ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    sol: number;
+    init: EquationState;
+  }> = [
+    {
+      num: 6,
+      title: 'Batu Bulan di Kanan',
+      tip: 'Pindahkan −4 dari ruas kanan ke kiri agar berubah menjadi +4!',
+      par: 2,
+      sol: 11,
+      init: { left: [c('1_6_l1', 7)], right: [v('1_6_r1', 1), c('1_6_r2', -4)] },
+    },
+    {
+      num: 7,
+      title: 'Hapus Pasangan +5 & −5',
+      tip: 'Gabungkan +5 dan −5 dulu di kiri agar lenyap menjadi 0!',
+      par: 1,
+      sol: 9,
+      init: { left: [v('1_7_l1', 1), c('1_7_l2', 5), c('1_7_l3', -5)], right: [c('1_7_r1', 9)] },
+    },
+    {
+      num: 8,
+      title: 'Menyeberang +6',
+      tip: 'Tarik +6 menyeberangi jembatan = menjadi −6 lalu gabungkan dengan +13.',
+      par: 2,
+      sol: 7,
+      init: { left: [v('1_8_l1', 1), c('1_8_l2', 6)], right: [c('1_8_r1', 13)] },
+    },
+    {
+      num: 9,
+      title: 'Menyeberang −7',
+      tip: 'Tarik −7 ke kanan menjadi +7, lalu gabungkan dengan +5!',
+      par: 2,
+      sol: 12,
+      init: { left: [v('1_9_l1', 1), c('1_9_l2', -7)], right: [c('1_9_r1', 5)] },
+    },
+    {
+      num: 10,
+      title: 'Dua Batu Surya di Kiri',
+      tip: 'Gabungkan +2 dan +3 di ruas kiri menjadi +5, lalu seberangkan ke kanan!',
+      par: 3,
+      sol: 6,
+      init: { left: [v('1_10_l1', 1), c('1_10_l2', 2), c('1_10_l3', 3)], right: [c('1_10_r1', 11)] },
+    },
+    {
+      num: 11,
+      title: 'Batu Pusaka di Kanan Lagi',
+      tip: 'Pindahkan +8 dari kanan ke kiri menjadi −8, lalu gabungkan dengan +15.',
+      par: 2,
+      sol: 7,
+      init: { left: [c('1_11_l1', 15)], right: [v('1_11_r1', 1), c('1_11_r2', 8)] },
+    },
+    {
+      num: 12,
+      title: 'Gabung di Ruas Kanan',
+      tip: 'Gabungkan +6 dan +4 di kanan, lalu pindahkan +3 dari kiri ke kanan!',
+      par: 3,
+      sol: 7,
+      init: { left: [v('1_12_l1', 1), c('1_12_l2', 3)], right: [c('1_12_r1', 6), c('1_12_r2', 4)] },
+    },
+    {
+      num: 13,
+      title: 'Dua Batu Bulan',
+      tip: 'Gabungkan −2 dan −3 di kiri menjadi −5, lalu pindahkan ke kanan!',
+      par: 3,
+      sol: 12,
+      init: { left: [v('1_13_l1', 1), c('1_13_l2', -2), c('1_13_l3', -3)], right: [c('1_13_r1', 7)] },
+    },
+    {
+      num: 14,
+      title: 'Surya & Bulan di Kanan',
+      tip: 'Gabungkan +6 dan −2 di sisi kanan, lalu pindahkan sisanya ke kiri!',
+      par: 3,
+      sol: 9,
+      init: { left: [c('1_14_l1', 13)], right: [v('1_14_r1', 1), c('1_14_r2', 6), c('1_14_r3', -2)] },
+    },
+    {
+      num: 15,
+      title: 'Batu Kembar Seberang',
+      tip: 'Pindahkan +9 ke kanan menjadi −9 lalu gabungkan dengan +18!',
+      par: 2,
+      sol: 9,
+      init: { left: [v('1_15_l1', 1), c('1_15_l2', 9)], right: [c('1_15_r1', 18)] },
+    },
+    {
+      num: 16,
+      title: 'Batu Pantai Berlapis',
+      tip: 'Gabungkan angka di kiri (+7 dan −4) dan di kanan (+8 dan +2), lalu pindah ruas!',
+      par: 4,
+      sol: 7,
+      init: {
+        left: [v('1_16_l1', 1), c('1_16_l2', 7), c('1_16_l3', -4)],
+        right: [c('1_16_r1', 8), c('1_16_r2', 2)],
+      },
+    },
+    {
+      num: 17,
+      title: 'Pasangan Nol Tersembunyi',
+      tip: 'Hapus dulu +4 dan −4 di kiri, lalu pindahkan −3 ke kanan!',
+      par: 3,
+      sol: 11,
+      init: {
+        left: [v('1_17_l1', 1), c('1_17_l2', 4), c('1_17_l3', -4), c('1_17_l4', -3)],
+        right: [c('1_17_r1', 8)],
+      },
+    },
+    {
+      num: 18,
+      title: 'Pantai Kanan Sibuk',
+      tip: 'Rapikan −5 dan +2 di kanan menjadi −3, lalu pindahkan ke kiri!',
+      par: 4,
+      sol: 14,
+      init: {
+        left: [c('1_18_l1', 6), c('1_18_l2', 5)],
+        right: [v('1_18_r1', 1), c('1_18_r2', -5), c('1_18_r3', 2)],
+      },
+    },
+    {
+      num: 19,
+      title: 'Tantangan Terakhir Batu Angka',
+      tip: 'Sederhanakan kedua sisi timbangan, lalu sisakan x sendirian!',
+      par: 4,
+      sol: 10,
+      init: {
+        left: [v('1_19_l1', 1), c('1_19_l2', 8), c('1_19_l3', -3)],
+        right: [c('1_19_r1', 9), c('1_19_r2', 6)],
+      },
+    },
+  ];
+
+  return specs.map((s) => ({
+    id: `1-${s.num}`,
+    chapterId: 1,
+    levelNumber: s.num,
+    title: s.title,
+    tip: s.tip,
+    defaultVisual: 'stones',
+    parMoves: s.par,
+    solution: s.sol,
+    initial: s.init,
+  }));
+}
+
+function buildBab2ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    sol: number;
+    init: EquationState;
+  }> = [
+    {
+      num: 6,
+      title: 'Kurang Jadi Tambah',
+      tip: 'Pindahkan −8 ke kanan menjadi +8 lalu gabungkan dengan −2!',
+      par: 2,
+      sol: 6,
+      init: { left: [v('2_6_l1', 1), c('2_6_l2', -8)], right: [c('2_6_r1', -2)] },
+    },
+    {
+      num: 7,
+      title: 'Menyelam ke Negatif',
+      tip: 'Pindahkan +9 ke kanan menjadi −9 lalu gabungkan dengan +4.',
+      par: 2,
+      sol: -5,
+      init: { left: [v('2_7_l1', 1), c('2_7_l2', 9)], right: [c('2_7_r1', 4)] },
+    },
+    {
+      num: 8,
+      title: 'Dua Bilangan Negatif',
+      tip: 'Pindahkan +6 ke kanan menjadi −6, gabungkan dengan −3 menjadi −9!',
+      par: 2,
+      sol: -9,
+      init: { left: [v('2_8_l1', 1), c('2_8_l2', 6)], right: [c('2_8_r1', -3)] },
+    },
+    {
+      num: 9,
+      title: 'Variabel di Kanan Negatif',
+      tip: 'Pindahkan +7 dari kanan ke kiri (jadi −7) lalu gabungkan dengan +2!',
+      par: 2,
+      sol: -5,
+      init: { left: [c('2_9_l1', 2)], right: [v('2_9_r1', 1), c('2_9_r2', 7)] },
+    },
+    {
+      num: 10,
+      title: 'Kembali ke Nol Lagi',
+      tip: 'Pindahkan −7 ke kanan menjadi +7 — lihat ia saling menghapus dengan −7!',
+      par: 2,
+      sol: 0,
+      init: { left: [v('2_10_l1', 1), c('2_10_l2', -7)], right: [c('2_10_r1', -7)] },
+    },
+    {
+      num: 11,
+      title: 'Dari Nol Menyeberang',
+      tip: 'Ruas kanan kosong (0). Pindahkan +8 ke kanan agar x = −8!',
+      par: 1,
+      sol: -8,
+      init: { left: [v('2_11_l1', 1), c('2_11_l2', 8)], right: [] },
+    },
+    {
+      num: 12,
+      title: 'Menyeberang ke Kosong',
+      tip: 'Ruas kiri kosong (0). Pindahkan −11 ke kiri menjadi +11!',
+      par: 1,
+      sol: 11,
+      init: { left: [], right: [v('2_12_r1', 1), c('2_12_r2', -11)] },
+    },
+    {
+      num: 13,
+      title: 'Kombinasi Negatif Kiri',
+      tip: 'Gabungkan −5 dan −4 di kiri dulu menjadi −9, lalu pindah ke kanan!',
+      par: 3,
+      sol: 5,
+      init: { left: [v('2_13_l1', 1), c('2_13_l2', -5), c('2_13_l3', -4)], right: [c('2_13_r1', -4)] },
+    },
+    {
+      num: 14,
+      title: 'Tiga Suku Negatif',
+      tip: 'Gabungkan +10 dan −4 di kiri (jadi +6), lalu pindahkan ke kanan!',
+      par: 3,
+      sol: -8,
+      init: { left: [v('2_14_l1', 1), c('2_14_l2', 10), c('2_14_l3', -4)], right: [c('2_14_r1', -2)] },
+    },
+    {
+      num: 15,
+      title: 'Angka Kembar Dua Sisi',
+      tip: 'Gabungkan −6 dan +2 di kanan, lalu pindahkan +5 dari kiri!',
+      par: 3,
+      sol: -9,
+      init: { left: [v('2_15_l1', 1), c('2_15_l2', 5)], right: [c('2_15_r1', -6), c('2_15_r2', 2)] },
+    },
+    {
+      num: 16,
+      title: 'Jembatan −12',
+      tip: 'Pindahkan −12 dari kanan ke kiri menjadi +12, lalu gabungkan dengan −5!',
+      par: 2,
+      sol: 7,
+      init: { left: [c('2_16_l1', -5)], right: [v('2_16_r1', 1), c('2_16_r2', -12)] },
+    },
+    {
+      num: 17,
+      title: 'Rapikan Kiri & Kanan',
+      tip: 'Sederhanakan angka di kedua ruas sebelum menyeberang jembatan =.',
+      par: 4,
+      sol: -3,
+      init: {
+        left: [v('2_17_l1', 1), c('2_17_l2', 9), c('2_17_l3', -2)],
+        right: [c('2_17_r1', 8), c('2_17_r2', -4)],
+      },
+    },
+    {
+      num: 18,
+      title: 'Adu Angka Besar',
+      tip: 'Gabungkan −8 dan +3 di kanan (jadi −5), lalu pindahkan ke kiri!',
+      par: 4,
+      sol: 3,
+      init: {
+        left: [c('2_18_l1', -9), c('2_18_l2', 7)],
+        right: [v('2_18_r1', 1), c('2_18_r2', -8), c('2_18_r3', 3)],
+      },
+    },
+    {
+      num: 19,
+      title: 'Ujian Akhir Tambah Kurang',
+      tip: 'Gabungkan semua angka sejenis dengan teliti lalu pindahkan agar x sendirian!',
+      par: 4,
+      sol: -6,
+      init: {
+        left: [v('2_19_l1', 1), c('2_19_l2', 11), c('2_19_l3', -3)],
+        right: [c('2_19_r1', 7), c('2_19_r2', -5)],
+      },
+    },
+  ];
+
+  return specs.map((s) => ({
+    id: `2-${s.num}`,
+    chapterId: 2,
+    levelNumber: s.num,
+    title: s.title,
+    tip: s.tip,
+    defaultVisual: 'symbols',
+    parMoves: s.par,
+    solution: s.sol,
+    initial: s.init,
+  }));
+}
+
+function buildBab3ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    sol: number;
+    init: EquationState;
+  }> = [
+    {
+      num: 6,
+      title: 'Tiga x Lawan Dua x',
+      tip: 'Pindahkan 2x dari kanan ke kiri menjadi −2x, lalu gabungkan dengan 3x!',
+      par: 2,
+      sol: 8,
+      init: { left: [v('3_6_l1', 3)], right: [v('3_6_r1', 2), c('3_6_r2', 8)] },
+    },
+    {
+      num: 7,
+      title: 'Pindah x ke Kanan',
+      tip: 'Pindahkan 2x dari kiri ke kanan menjadi −2x agar di kanan tersisa +x!',
+      par: 2,
+      sol: 6,
+      init: { left: [v('3_7_l1', 2), c('3_7_l2', 6)], right: [v('3_7_r1', 3)] },
+    },
+    {
+      num: 8,
+      title: 'Balik Tanda −x',
+      tip: 'Pindahkan +9 ke kanan (jadi −5), lalu tekan "Balik ±" agar −x jadi +x!',
+      par: 3,
+      sol: 5,
+      init: { left: [c('3_8_l1', 9), v('3_8_l2', -1)], right: [c('3_8_r1', 4)] },
+    },
+    {
+      num: 9,
+      title: 'Tukar Suku Seberang',
+      tip: 'Pindahkan 2x ke kiri dan +3 ke kanan, lalu gabungkan suku sejenis!',
+      par: 4,
+      sol: 4,
+      init: { left: [v('3_9_l1', 3), c('3_9_l2', 3)], right: [v('3_9_r1', 2), c('3_9_r2', 7)] },
+    },
+    {
+      num: 10,
+      title: 'Hasil Negatif Dua Sisi',
+      tip: 'Pindahkan 3x ke kiri (jadi x) dan +8 ke kanan (jadi −3)!',
+      par: 4,
+      sol: -3,
+      init: { left: [v('3_10_l1', 4), c('3_10_l2', 8)], right: [v('3_10_r1', 3), c('3_10_r2', 5)] },
+    },
+    {
+      num: 11,
+      title: 'Kumpulkan x di Kanan',
+      tip: 'Pindahkan 3x ke kanan dan −4 ke kiri agar koefisien x positif!',
+      par: 4,
+      sol: 9,
+      init: { left: [v('3_11_l1', 3), c('3_11_l2', 5)], right: [v('3_11_r1', 4), c('3_11_r2', -4)] },
+    },
+    {
+      num: 12,
+      title: 'Menjinakkan −x di Kanan',
+      tip: 'Pindahkan −x ke kiri menjadi +x, dan pindahkan +3 ke kanan!',
+      par: 3,
+      sol: 7,
+      init: { left: [c('3_12_l1', 3)], right: [c('3_12_r1', 10), v('3_12_r2', -1)] },
+    },
+    {
+      num: 13,
+      title: 'Lima x & Empat x',
+      tip: 'Tarik 4x ke kiri dan −6 ke kanan lalu gabungkan keduanya!',
+      par: 4,
+      sol: 10,
+      init: { left: [v('3_13_l1', 5), c('3_13_l2', -6)], right: [v('3_13_r1', 4), c('3_13_r2', 4)] },
+    },
+    {
+      num: 14,
+      title: 'Gabung x di Ruas Sama',
+      tip: 'Gabungkan dulu 2x dan +x di kiri menjadi 3x, lalu kurangi dengan 2x dari kanan!',
+      par: 4,
+      sol: 6,
+      init: {
+        left: [v('3_14_l1', 2), v('3_14_l2', 1)],
+        right: [v('3_14_r1', 2), c('3_14_r2', 6)],
+      },
+    },
+    {
+      num: 15,
+      title: 'Variabel Negatif Bertemu',
+      tip: 'Pindahkan −2x dari kanan ke kiri agar berubah menjadi +2x lalu gabungkan dengan −x!',
+      par: 4,
+      sol: 5,
+      init: {
+        left: [v('3_15_l1', -1), c('3_15_l2', 3)],
+        right: [v('3_15_r1', -2), c('3_15_r2', 8)],
+      },
+    },
+    {
+      num: 16,
+      title: 'Dua Suku x di Kanan',
+      tip: 'Gabungkan 4x dan −x di kanan dulu menjadi 3x, lalu kumpulkan dengan 2x!',
+      par: 5,
+      sol: -4,
+      init: {
+        left: [v('3_16_l1', 2), c('3_16_l2', -1)],
+        right: [v('3_16_r1', 4), v('3_16_r2', -1), c('3_16_r3', 3)],
+      },
+    },
+    {
+      num: 17,
+      title: 'Menuju Nol Dua Ruas',
+      tip: 'Kumpulkan x di kiri dan angka di kanan — lihat hasilnya saling menghapus jadi 0!',
+      par: 4,
+      sol: 0,
+      init: { left: [v('3_17_l1', 5), c('3_17_l2', 7)], right: [v('3_17_r1', 4), c('3_17_r2', 7)] },
+    },
+    {
+      num: 18,
+      title: 'Enam x Lawan Lima x',
+      tip: 'Pindahkan 5x ke kiri dan +9 ke kanan, perhatikan hasil negatifnya!',
+      par: 4,
+      sol: -6,
+      init: { left: [v('3_18_l1', 6), c('3_18_l2', 9)], right: [v('3_18_r1', 5), c('3_18_r2', 3)] },
+    },
+    {
+      num: 19,
+      title: 'Gerbang Bos Variabel',
+      tip: 'Gabungkan suku x di kiri dulu, lalu kumpulkan semua x di satu sisi dan angka di sisi lain!',
+      par: 5,
+      sol: 7,
+      init: {
+        left: [v('3_19_l1', 3), v('3_19_l2', 2), c('3_19_l3', -4)],
+        right: [v('3_19_r1', 4), c('3_19_r2', 3)],
+      },
+    },
+  ];
+
+  return specs.map((s) => ({
+    id: `3-${s.num}`,
+    chapterId: 3,
+    levelNumber: s.num,
+    title: s.title,
+    tip: s.tip,
+    defaultVisual: 'symbols',
+    parMoves: s.par,
+    solution: s.sol,
+    initial: s.init,
+  }));
+}
+
+function buildBab4ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    sol: number;
+    init: EquationState;
+  }> = [
+    {
+      num: 6,
+      title: 'Pengali Tiga',
+      tip: 'Tarik pengali ×3 ke kanan agar membagi 15 menjadi 5!',
+      par: 1,
+      sol: 5,
+      init: { left: [v('4_6_l1', 3)], right: [c('4_6_r1', 15)] },
+    },
+    {
+      num: 7,
+      title: 'Pembagi Empat',
+      tip: 'Tarik penyebut ÷4 ke kanan agar berubah menjadi ×4!',
+      par: 1,
+      sol: 12,
+      init: { left: [v('4_7_l1', 1, 4)], right: [c('4_7_r1', 3)] },
+    },
+    {
+      num: 8,
+      title: 'Kurang Dulu, Lalu Bagi',
+      tip: 'Pindahkan −4 ke kanan dulu (jadi 10), baru pindahkan ×2 → ÷2!',
+      par: 3,
+      sol: 5,
+      init: { left: [v('4_8_l1', 2), c('4_8_l2', -4)], right: [c('4_8_r1', 6)] },
+    },
+    {
+      num: 9,
+      title: 'Pecahan dengan Kurang',
+      tip: 'Pindahkan −2 ke kanan (jadi 5), lalu pindahkan ÷3 → ×3!',
+      par: 3,
+      sol: 15,
+      init: { left: [v('4_9_l1', 1, 3), c('4_9_l2', -2)], right: [c('4_9_r1', 3)] },
+    },
+    {
+      num: 10,
+      title: 'Koefisien di Ruas Kanan',
+      tip: 'Pindahkan +5 ke kiri dulu (jadi 12), lalu pindahkan ×4 dari kanan ke kiri!',
+      par: 3,
+      sol: 3,
+      init: { left: [c('4_10_l1', 17)], right: [v('4_10_r1', 4), c('4_10_r2', 5)] },
+    },
+    {
+      num: 11,
+      title: 'Hasil Negatif Perkalian',
+      tip: 'Pindahkan +9 ke kanan (jadi −6), lalu pindahkan ×3 → ÷3!',
+      par: 3,
+      sol: -2,
+      init: { left: [v('4_11_l1', 3), c('4_11_l2', 9)], right: [c('4_11_r1', 3)] },
+    },
+    {
+      num: 12,
+      title: 'Pecahan Hasil Negatif',
+      tip: 'Pindahkan +5 ke kanan (jadi −3), lalu pindahkan ÷4 → ×4!',
+      par: 3,
+      sol: -12,
+      init: { left: [v('4_12_l1', 1, 4), c('4_12_l2', 5)], right: [c('4_12_r1', 2)] },
+    },
+    {
+      num: 13,
+      title: 'Pengali Lima',
+      tip: 'Pindahkan −7 ke kanan (jadi 20), lalu pindahkan ×5 → ÷5!',
+      par: 3,
+      sol: 4,
+      init: { left: [v('4_13_l1', 5), c('4_13_l2', -7)], right: [c('4_13_r1', 13)] },
+    },
+    {
+      num: 14,
+      title: 'Bagi Lima di Kanan',
+      tip: 'Pindahkan +4 dari kanan ke kiri (jadi 3), lalu pindahkan ÷5 → ×5!',
+      par: 3,
+      sol: 15,
+      init: { left: [c('4_14_l1', 7)], right: [v('4_14_r1', 1, 5), c('4_14_r2', 4)] },
+    },
+    {
+      num: 15,
+      title: 'Koefisien Negatif −3',
+      tip: 'Pindahkan +2 ke kanan (jadi 12), lalu pindahkan ×(−3) → ÷(−3)!',
+      par: 3,
+      sol: -4,
+      init: { left: [v('4_15_l1', -3), c('4_15_l2', 2)], right: [c('4_15_r1', 14)] },
+    },
+    {
+      num: 16,
+      title: 'Bagi Dua Negatif',
+      tip: 'Pindahkan +1 ke kanan (jadi 4), pindahkan ÷2 → ×2, lalu tekan Balik ±!',
+      par: 4,
+      sol: -8,
+      init: { left: [v('4_16_l1', -1, 2), c('4_16_l2', 1)], right: [c('4_16_r1', 5)] },
+    },
+    {
+      num: 17,
+      title: 'Gabung Dulu Baru Bagi',
+      tip: 'Gabungkan 2x dan 2x di kiri menjadi 4x, lalu bagi 20 dengan 4!',
+      par: 2,
+      sol: 5,
+      init: { left: [v('4_17_l1', 2), v('4_17_l2', 2)], right: [c('4_17_r1', 20)] },
+    },
+    {
+      num: 18,
+      title: 'Pengali −4 di Kanan',
+      tip: 'Pindahkan −6 ke kiri (jadi 16), lalu pindahkan ×(−4) → ÷(−4)!',
+      par: 3,
+      sol: -4,
+      init: { left: [c('4_18_l1', 10)], right: [v('4_18_r1', -4), c('4_18_r2', -6)] },
+    },
+    {
+      num: 19,
+      title: 'Ujian Gerbang Kali-Bagi',
+      tip: 'Gabungkan angka di kedua ruas, lalu bagi dengan pengali 6!',
+      par: 4,
+      sol: 3,
+      init: {
+        left: [v('4_19_l1', 6), c('4_19_l2', -5)],
+        right: [c('4_19_r1', 9), c('4_19_r2', 4)],
+      },
+    },
+  ];
+
+  return specs.map((s) => ({
+    id: `4-${s.num}`,
+    chapterId: 4,
+    levelNumber: s.num,
+    title: s.title,
+    tip: s.tip,
+    defaultVisual: 'symbols',
+    parMoves: s.par,
+    solution: s.sol,
+    initial: s.init,
+  }));
+}
+
+function buildBab5ExtraStages(): LevelDef[] {
+  const specs: Array<{
+    num: number;
+    title: string;
+    tip: string;
+    par: number;
+    sol: number;
+    init: EquationState;
+  }> = [
+    {
+      num: 6,
+      title: 'Kurung Empat Kali',
+      tip: 'Pindahkan pengali ×4 ke kanan (jadi 5), atau buka kurung 4(x + 2) dulu!',
+      par: 3,
+      sol: 3,
+      init: { left: [g('5_6_l1', 4, 1, 2)], right: [c('5_6_r1', 20)] },
+    },
+    {
+      num: 7,
+      title: 'Kurung di Ruas Kanan',
+      tip: 'Buka kurung 2(x − 4) di kanan atau langsung bagi 14 dengan 2!',
+      par: 3,
+      sol: 11,
+      init: { left: [c('5_7_l1', 14)], right: [g('5_7_r1', 2, 1, -4)] },
+    },
+    {
+      num: 8,
+      title: 'Dua Ruas Hasil Negatif',
+      tip: 'Kumpulkan x di kiri (5x − 3x = 2x) dan angka di kanan (3 − 11 = −8), lalu bagi 2!',
+      par: 5,
+      sol: -4,
+      init: { left: [v('5_8_l1', 5), c('5_8_l2', 11)], right: [v('5_8_r1', 3), c('5_8_r2', 3)] },
+    },
+    {
+      num: 9,
+      title: 'Kurung Hasil Negatif',
+      tip: 'Bagi −9 dengan 3 (jadi −3), lalu pindahkan +2 ke kanan!',
+      par: 3,
+      sol: -5,
+      init: { left: [g('5_9_l1', 3, 1, 2)], right: [c('5_9_r1', -9)] },
+    },
+    {
+      num: 10,
+      title: 'Kurung + Konstanta Luar',
+      tip: 'Buka kurung 2(x + 3) jadi 2x + 6, gabungkan dengan +4, lalu pindah ke kanan!',
+      par: 5,
+      sol: 3,
+      init: { left: [g('5_10_l1', 2, 1, 3), c('5_10_l2', 4)], right: [c('5_10_r1', 16)] },
+    },
+    {
+      num: 11,
+      title: 'Tiga Kali Kurung vs x',
+      tip: 'Buka kurung 3(x + 1) menjadi 3x + 3, lalu kumpulkan x di kiri dan angka di kanan!',
+      par: 6,
+      sol: 4,
+      init: { left: [g('5_11_l1', 3, 1, 1)], right: [v('5_11_r1', 1), c('5_11_r2', 11)] },
+    },
+    {
+      num: 12,
+      title: 'Pengali Negatif di Luar',
+      tip: 'Buka kurung −2(x + 3) menjadi −2x − 6, atau langsung bagi 10 dengan −2!',
+      par: 3,
+      sol: -8,
+      init: { left: [g('5_12_l1', -2, 1, 3)], right: [c('5_12_r1', 10)] },
+    },
+    {
+      num: 13,
+      title: 'Enam x Lawan Dua x',
+      tip: 'Pindahkan 2x ke kiri (jadi 4x) dan −7 ke kanan (jadi 16), lalu bagi 4!',
+      par: 5,
+      sol: 4,
+      init: { left: [v('5_13_l1', 6), c('5_13_l2', -7)], right: [v('5_13_r1', 2), c('5_13_r2', 9)] },
+    },
+    {
+      num: 14,
+      title: 'Kurung Koefisien Dalam 2x',
+      tip: 'Pindahkan ×2 ke kanan (jadi 9) atau buka kurung 2(2x + 1) menjadi 4x + 2!',
+      par: 4,
+      sol: 4,
+      init: { left: [g('5_14_l1', 2, 2, 1)], right: [c('5_14_r1', 18)] },
+    },
+    {
+      num: 15,
+      title: 'Kurung Pengurangan vs 2x',
+      tip: 'Buka kurung 4(x − 2) menjadi 4x − 8, lalu kumpulkan x di kiri!',
+      par: 6,
+      sol: 6,
+      init: { left: [g('5_15_l1', 4, 1, -2)], right: [v('5_15_r1', 2), c('5_15_r2', 4)] },
+    },
+    {
+      num: 16,
+      title: 'Pengali Negatif −3',
+      tip: 'Pindahkan ×(−3) ke kanan untuk membagi 15 (jadi −5), lalu pindahkan −4!',
+      par: 3,
+      sol: -1,
+      init: { left: [g('5_16_l1', -3, 1, -4)], right: [c('5_16_r1', 15)] },
+    },
+    {
+      num: 17,
+      title: 'Kurung & Angka Kiri Kanan',
+      tip: 'Buka kurung 3(x − 1) = 3x − 3, gabungkan dengan +5, lalu selesaikan!',
+      par: 5,
+      sol: 5,
+      init: { left: [g('5_17_l1', 3, 1, -1), c('5_17_l2', 5)], right: [c('5_17_r1', 17)] },
+    },
+    {
+      num: 18,
+      title: 'Dua Sisi Koefisien Besar',
+      tip: 'Kumpulkan x di kiri (7x − 3x = 4x) dan angka di kanan (−6 − 10 = −16), lalu bagi 4!',
+      par: 5,
+      sol: -4,
+      init: { left: [v('5_18_l1', 7), c('5_18_l2', 10)], right: [v('5_18_r1', 3), c('5_18_r2', -6)] },
+    },
+    {
+      num: 19,
+      title: 'Gerbang Maharaja Aljabar',
+      tip: 'Buka kurung 2(2x − 3) menjadi 4x − 6, lalu kumpulkan x di kiri dan angka di kanan!',
+      par: 6,
+      sol: 5,
+      init: { left: [g('5_19_l1', 2, 2, -3)], right: [v('5_19_r1', 1), c('5_19_r2', 9)] },
+    },
+  ];
+
+  return specs.map((s) => ({
+    id: `5-${s.num}`,
+    chapterId: 5,
+    levelNumber: s.num,
+    title: s.title,
+    tip: s.tip,
+    defaultVisual: 'symbols',
+    parMoves: s.par,
+    solution: s.sol,
+    initial: s.init,
+  }));
+}
+
 export const CHAPTERS: ChapterDef[] = [
   // =========================================================================
-  // BAB 0: KHUSUS SIMBOL SAJA (TANPA ANGKA, TANPA HURUF X)
+  // BAB 0: KHUSUS SIMBOL SAJA (20 STAGES)
   // =========================================================================
   {
     id: 0,
-    title: 'Bab 0: Taman Simbol Dasar',
+    title: 'Bab 0: Pantai Simbol Dasar',
     subtitle: 'Pahami konsep pindah ruas dan pasangan lawan tanpa angka sama sekali!',
     focusRule: 'Simbol Murni · Konsep Dasar',
     artwork: '/src/assets/images/chapter_batu_lawan_1795079216185.jpg',
@@ -47,7 +938,7 @@ export const CHAPTERS: ChapterDef[] = [
             mood: 'wave',
             title: 'Halo! Aku Kibo si Hiu Gemoy!',
             message:
-              'Selamat datang di Bab 0! Di sini belum ada angka sama sekali. Tugas kita cuma satu: buat Peti Pusaka berdiri sendirian di satu sisi timbangan!',
+              'Selamat datang di Pantai Bab 0! Di sini belum ada angka sama sekali. Tugas kita cuma satu: buat Peti Pusaka berdiri sendirian di satu sisi timbangan!',
             highlightIds: ['l1'],
             buttonLabel: 'Lanjut',
           },
@@ -100,10 +991,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [v('r1', 1), sym('r2', 'sun', 1), sym('r3', 'leaf', -1)],
         },
       },
+      ...buildBab0ExtraStages(),
       {
         id: '0-boss',
         chapterId: 0,
-        levelNumber: 5,
+        levelNumber: 20,
         title: 'Bos: Kura-Kura Batu Simbol',
         tip: 'Selesaikan 3 teka-teki simbol berturut-turut untuk mengalahkan Kura-Kura Batu!',
         defaultVisual: 'pure_symbols',
@@ -115,7 +1007,7 @@ export const CHAPTERS: ChapterDef[] = [
         },
         boss: {
           name: 'Kura-Kura Batu',
-          role: 'Penjaga Taman Simbol',
+          role: 'Penjaga Pantai Simbol',
           artwork: BOSS_TURTLE_ART,
           introLine: 'Hoho! Tunjukkan kamu paham rahasia simbol sebelum menyentuh angka!',
           hitLines: [
@@ -155,11 +1047,11 @@ export const CHAPTERS: ChapterDef[] = [
   },
 
   // =========================================================================
-  // BAB 1: BATU & LAWAN (MULAI MENGENAL ANGKA)
+  // BAB 1: BATU ANGKA & LAWAN (20 STAGES)
   // =========================================================================
   {
     id: 1,
-    title: 'Bab 1: Batu Angka & Lawan',
+    title: 'Bab 1: Pulau Batu Angka',
     subtitle: 'Saatnya batu simbol membawa nilai angka! Gabungkan dan hapus menuju nol.',
     focusRule: 'Pembatalan Nol & Angka Awal',
     artwork: '/src/assets/images/chapter_jembatan_ruas_1795079216463.jpg',
@@ -252,10 +1144,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [v('r1', 1), c('r2', 3)],
         },
       },
+      ...buildBab1ExtraStages(),
       {
         id: '1-boss',
         chapterId: 1,
-        levelNumber: 6,
+        levelNumber: 20,
         title: 'Bos: Raja Timbangan Kayu',
         tip: 'Kalahkan 3 tantangan batu angka dari Raja Timbangan Kayu!',
         defaultVisual: 'stones',
@@ -307,11 +1200,11 @@ export const CHAPTERS: ChapterDef[] = [
   },
 
   // =========================================================================
-  // BAB 2: PINDAH TAMBAH & KURANG (SIMBOL ALJABAR MURNI)
+  // BAB 2: PINDAH TAMBAH & KURANG (20 STAGES)
   // =========================================================================
   {
     id: 2,
-    title: 'Bab 2: Pindah Tambah & Kurang',
+    title: 'Bab 2: Teluk Tambah & Kurang',
     subtitle: 'Beralih ke simbol aljabar murni dan kuasai bilangan negatif serta nol.',
     focusRule: 'Pindah Ruas + ↔ −',
     levels: [
@@ -403,10 +1296,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [c('r1', 5)],
         },
       },
+      ...buildBab2ExtraStages(),
       {
         id: '2-boss',
         chapterId: 2,
-        levelNumber: 6,
+        levelNumber: 20,
         title: 'Bos: Penjaga Jembatan Negatif',
         tip: 'Hadapi 3 persamaan simbol berangka negatif untuk menaklukkan Bos Bab 2!',
         defaultVisual: 'symbols',
@@ -458,11 +1352,11 @@ export const CHAPTERS: ChapterDef[] = [
   },
 
   // =========================================================================
-  // BAB 3: KUMPULKAN SUKU X
+  // BAB 3: KUMPULKAN SUKU X (20 STAGES)
   // =========================================================================
   {
     id: 3,
-    title: 'Bab 3: Kumpulkan Suku x',
+    title: 'Bab 3: Laguna Suku x',
     subtitle: 'Variabel x muncul di kedua ruas. Satukan semua x di satu sisi!',
     focusRule: 'Pindah Variabel & Balik Tanda',
     levels: [
@@ -554,10 +1448,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [v('r1', 3), c('r2', -2)],
         },
       },
+      ...buildBab3ExtraStages(),
       {
         id: '3-boss',
         chapterId: 3,
-        levelNumber: 6,
+        levelNumber: 20,
         title: 'Bos: Burung Hantu Kembar',
         tip: 'Taklukkan 3 persamaan dengan variabel x di kedua sisi!',
         defaultVisual: 'symbols',
@@ -609,11 +1504,11 @@ export const CHAPTERS: ChapterDef[] = [
   },
 
   // =========================================================================
-  // BAB 4: PINDAH KALI & BAGI
+  // BAB 4: PINDAH KALI & BAGI (20 STAGES)
   // =========================================================================
   {
     id: 4,
-    title: 'Bab 4: Pindah Kali & Bagi',
+    title: 'Bab 4: Karang Kali & Bagi',
     subtitle: 'Saat x dikali koefisien atau dibagi penyebut, seberangkan pengalinya!',
     focusRule: 'Pindah Ruas × ↔ ÷',
     levels: [
@@ -705,10 +1600,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [c('r1', 7)],
         },
       },
+      ...buildBab4ExtraStages(),
       {
         id: '4-boss',
         chapterId: 4,
-        levelNumber: 6,
+        levelNumber: 20,
         title: 'Bos: Penjaga Gerbang Kali-Bagi',
         tip: 'Taklukkan 3 persamaan perkalian dan pembagian beruntun!',
         defaultVisual: 'symbols',
@@ -727,7 +1623,7 @@ export const CHAPTERS: ChapterDef[] = [
             'Wah, cangkangku bergetar! Coba hadapi pecahanku!',
             'Satu pukulan lagi dan gerbang akan terbuka!',
           ],
-          defeatLine: 'Gerbang terbuka lebar! Menuju Bab 5 — Tantangan Aljabar SMP!',
+          defeatLine: 'Gerbang terbuka lebar! Menuju Bab 5 — Tantangan Samudra Aljabar!',
           phases: [
             {
               label: 'Fase 1: Kali Menjadi Bagi',
@@ -760,11 +1656,11 @@ export const CHAPTERS: ChapterDef[] = [
   },
 
   // =========================================================================
-  // BAB 5: TANTANGAN ALJABAR SMP
+  // BAB 5: TANTANGAN SAMUDRA ALJABAR SMP (20 STAGES)
   // =========================================================================
   {
     id: 5,
-    title: 'Bab 5: Tantangan Aljabar SMP',
+    title: 'Bab 5: Samudra Aljabar SMP',
     subtitle: 'Gabungkan tanda kurung, distribusi, dan pindah ruas bertingkat.',
     focusRule: 'Distribusi Kurung & Multi-Langkah',
     levels: [
@@ -856,10 +1752,11 @@ export const CHAPTERS: ChapterDef[] = [
           right: [v('r1', 1), c('r2', 13)],
         },
       },
+      ...buildBab5ExtraStages(),
       {
         id: '5-boss',
         chapterId: 5,
-        levelNumber: 6,
+        levelNumber: 20,
         title: 'Bos Akhir: Maharaja Aljabar',
         tip: 'Ujian puncak 3 fase menggabungkan tanda kurung, dua ruas, dan koefisien!',
         defaultVisual: 'symbols',
