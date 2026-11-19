@@ -23,8 +23,10 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept pre-installed Android SDK licenses
+        run: |
+          echo "Using pre-installed ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
 
       - name: Install dependencies & build web bundle
         run: |
@@ -39,7 +41,9 @@ jobs:
 
       - name: Compile Debug APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload Setara APK artifact
         uses: actions/upload-artifact@v4
