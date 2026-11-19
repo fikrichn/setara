@@ -72,13 +72,43 @@ export interface BossPhase {
   initial: EquationState;
 }
 
+export type BossGimmick =
+  | 'normal'
+  | 'speed_enrage'
+  | 'many_numbers'
+  | 'freeze_penalty'
+  | 'heal_once'
+  | 'cosmic_many_hp';
+
+export interface KiboBossDialogues {
+  intro: string;
+  tapLines: string[];
+  gimmickAlert: string;
+  hitCheer: string;
+  victoryPreTos: string;
+  victoryPostTos: string;
+  defeatEncourage: string;
+}
+
 export interface BossConfig {
   name: string;
   role: string;
+  personality: string;
+  gimmick: BossGimmick;
+  gimmickLabel: string;
+  gimmickDesc: string;
+  timeLimitSeconds: number;
+  maxMistakes?: number;
+  penaltySeconds?: number;
+  healLine?: string;
+  enrageGimmickLine?: string;
   artwork: string;
   introLine: string;
+  tauntLines: string[];
   hitLines: string[];
   defeatLine: string;
+  timeoutLine: string;
+  kiboLines: KiboBossDialogues;
   phases: BossPhase[];
 }
 

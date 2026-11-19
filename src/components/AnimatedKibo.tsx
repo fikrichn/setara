@@ -19,6 +19,7 @@ interface AnimatedKiboProps {
   crown?: boolean;
   highFiveRaised?: boolean;
   interactive?: boolean;
+  customQuips?: string[];
   onInteract?: (quip: string) => void;
   className?: string;
 }
@@ -29,6 +30,7 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
   crown = false,
   highFiveRaised = false,
   interactive = true,
+  customQuips,
   onInteract,
   className = '',
 }) => {
@@ -37,6 +39,10 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
   const [isGiggling, setIsGiggling] = useState(false);
   const timerRef = useRef<number | null>(null);
   const quipIdxRef = useRef(0);
+
+  useEffect(() => {
+    quipIdxRef.current = 0;
+  }, [customQuips]);
 
   useEffect(() => {
     return () => {
@@ -67,7 +73,8 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => setIsGiggling(false), 1100);
 
-    const quip = KIBO_QUIPS[quipIdxRef.current % KIBO_QUIPS.length];
+    const pool = customQuips && customQuips.length > 0 ? customQuips : KIBO_QUIPS;
+    const quip = pool[quipIdxRef.current % pool.length];
     quipIdxRef.current += 1;
     onInteract?.(quip);
   };

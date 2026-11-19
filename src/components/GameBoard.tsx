@@ -20,6 +20,7 @@ import {
   checkSolved,
   cloneState,
   combineTerms,
+  computeEquationComplexity,
   expandGroupTerm,
   flipBothSides,
   formatEquation,
@@ -54,6 +55,7 @@ import {
 import { BeachBackdrop } from './BeachBackdrop';
 import {
   BossArenaBanner,
+  BossDefeatModal,
   KiboAvatar,
   KiboBossCelebration,
   KiboMood,
@@ -127,15 +129,22 @@ interface SparkBurst {
   label?: string;
 }
 
-const BOSS_TAUNTS = [
-  'Heh! Cuma begitu saja kemampuan pindah ruasmu?',
-  'Timbanganku tak akan goyah oleh geseran biasa!',
-  'Awas salah tanda waktu melintasi jembatan =!',
-  'Rasakan irama Phonk ini! Coba pisahkan variabelnya!',
-  'Kibo tidak bisa menyelamatkanmu kalau kamu asal tebak!',
-];
-
 const SPARK_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+const COSMIC_STARS = [
+  { left: '8%', top: '14%', size: 4, dur: '2.1s', delay: '0s', color: '#FEF08A' },
+  { left: '19%', top: '34%', size: 3, dur: '2.6s', delay: '0.4s', color: '#22D3EE' },
+  { left: '28%', top: '18%', size: 5, dur: '1.9s', delay: '0.9s', color: '#F0ABFC' },
+  { left: '42%', top: '10%', size: 3, dur: '2.4s', delay: '0.2s', color: '#FFFFFF' },
+  { left: '56%', top: '26%', size: 4, dur: '2.0s', delay: '0.7s', color: '#22D3EE' },
+  { left: '71%', top: '15%', size: 5, dur: '2.3s', delay: '0.3s', color: '#FEF08A' },
+  { left: '85%', top: '28%', size: 4, dur: '1.8s', delay: '1.1s', color: '#F0ABFC' },
+  { left: '92%', top: '52%', size: 3, dur: '2.5s', delay: '0.5s', color: '#FFFFFF' },
+  { left: '14%', top: '68%', size: 4, dur: '2.2s', delay: '0.8s', color: '#F0ABFC' },
+  { left: '34%', top: '76%', size: 3, dur: '2.7s', delay: '0.1s', color: '#22D3EE' },
+  { left: '66%', top: '72%', size: 5, dur: '2.0s', delay: '0.6s', color: '#FEF08A' },
+  { left: '84%', top: '80%', size: 4, dur: '2.4s', delay: '1.0s', color: '#22D3EE' },
+];
 
 export const GameBoard: React.FC<GameBoardProps> = ({
   level,
@@ -147,6 +156,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   onNewPractice,
 }) => {
   const isBossLevel = !!level.isBoss && !!level.boss && level.boss.phases.length > 0;
+  const isStageOne = level.levelNumber === 1 && !level.isPractice;
+  const bossGimmick = level.boss?.gimmick;
+  const totalBossTime = level.boss?.timeLimitSeconds ?? 90;
+  const maxBossMistakes = level.boss?.maxMistakes ?? 4;
+  const bossPenaltySec = level.boss?.penaltySeconds ?? 30;
+
   const initialPhaseState = useMemo(
     () => cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial),
     [level, isBossLevel]
@@ -154,9 +169,31 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const [bossPhaseIndex, setBossPhaseIndex] = useState(0);
   const [bossHitAnim, setBossHitAnim] = useState(false);
+  const [bossHealAnim, setBossHealAnim] = useState(false);
+  const [bossHasHealed, setBossHasHealed] = useState(false);
+  const [bossPreHealOneHp, setBossPreHealOneHp] = useState(false);
   const [bossStrikeAnim, setBossStrikeAnim] = useState(false);
   const [bossDialogue, setBossDialogue] = useState(level.boss?.introLine ?? '');
+  const [bossTimeLeft, setBossTimeLeft] = useState(totalBossTime);
+  const [bossMistakes, setBossMistakes] = useState(0);
+  const [bossTimedOut, setBossTimedOut] = useState(false);
+  const [bossDefeatReason, setBossDefeatReason] = useState<'timeout' | 'mistakes'>('timeout');
+  const [timeBonusFlash, setTimeBonusFlash] = useState(false);
+  const [timePenaltyFlash, setTimePenaltyFlash] = useState(false);
   const bossTauntIdxRef = useRef(0);
+  const timeBonusTimerRef = useRef<number | null>(null);
+  const timePenaltyTimerRef = useRef<number | null>(null);
+
+  const buildInitialExplanation = useCallback(
+    (lvl: LevelDef) => {
+      if (lvl.levelNumber === 1 && !lvl.isPractice) return lvl.tip;
+      if (lvl.defaultVisual === 'pure_symbols') {
+        return 'Buat Peti Pusaka berdiri sendirian di satu ruas.';
+      }
+      return 'Pisahkan variabel x hingga berdiri sendirian di satu ruas.';
+    },
+    []
+  );
 
   const [eqState, setEqState] = useState<EquationState>(initialPhaseState);
   const [undoStack, setUndoStack] = useState<EquationState[]>([]);
@@ -165,7 +202,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     {
       equationText: formatEquation(initialPhaseState, level.defaultVisual === 'pure_symbols'),
       ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
-      explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+      explanation: buildInitialExplanation(level),
       stateSnapshot: cloneState(initialPhaseState),
     },
   ]);
@@ -212,11 +249,36 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     flyTimerRef.current = [];
   }, []);
 
-  // ALWAYS-ACTIVE MUSIC LIFECYCLE: Tropical Stage Music for regular stages, Drift Phonk for Bosses
+  // ALWAYS-ACTIVE MUSIC LIFECYCLE & BOSS HP/GIMMICK COMPUTATION
   const totalBossPhases = level.boss?.phases.length ?? 0;
-  const bossCurrentHp = Math.max(0, totalBossPhases - bossPhaseIndex);
-  const phonkActive = isBossLevel && !solvedInfo && bossCurrentHp > 0;
-  const bossIntensity: 'normal' | 'enraged' = bossCurrentHp === 1 ? 'enraged' : 'normal';
+  const bossMaxHp = bossGimmick === 'heal_once' ? 3 : totalBossPhases;
+  const bossCurrentHp = useMemo(() => {
+    if (!isBossLevel) return 0;
+    if (bossGimmick === 'heal_once') {
+      if (bossPreHealOneHp) return 1;
+      if (!bossHasHealed) return Math.max(1, 3 - bossPhaseIndex);
+      return Math.max(0, totalBossPhases - bossPhaseIndex);
+    }
+    return Math.max(0, totalBossPhases - bossPhaseIndex);
+  }, [isBossLevel, bossGimmick, bossPreHealOneHp, bossHasHealed, bossPhaseIndex, totalBossPhases]);
+
+  const isTimeFrozen = isBossLevel && bossGimmick === 'freeze_penalty';
+  const isSpeedUp =
+    isBossLevel &&
+    !solvedInfo &&
+    !bossTimedOut &&
+    bossCurrentHp === 1 &&
+    (bossGimmick === 'speed_enrage' || bossGimmick === 'cosmic_many_hp');
+  const cosmicMode =
+    isBossLevel &&
+    !solvedInfo &&
+    !bossTimedOut &&
+    bossCurrentHp === 1 &&
+    bossGimmick === 'cosmic_many_hp';
+
+  const phonkActive = isBossLevel && !solvedInfo && !bossTimedOut && bossCurrentHp > 0;
+  const bossIntensity: 'normal' | 'enraged' =
+    bossCurrentHp === 1 || bossHasHealed ? 'enraged' : 'normal';
 
   useEffect(() => {
     if (phonkActive) {
@@ -232,16 +294,76 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return () => {
       phonkMusic.stop();
       if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
+      if (timeBonusTimerRef.current) window.clearTimeout(timeBonusTimerRef.current);
+      if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
     };
   }, []);
+
+  // Boss fight countdown timer:
+  // - Bab 3 (freeze_penalty): frozen (does NOT tick down; wrong moves deduct 30s!)
+  // - Bab 1 & Bab 5 at 1 HP: 2x faster tick (500ms)!
+  // - Others: normal 1000ms tick.
+  useEffect(() => {
+    if (
+      !isBossLevel ||
+      !level.boss ||
+      isTimeFrozen ||
+      solvedInfo ||
+      bossTimedOut ||
+      bossHitAnim ||
+      bossHealAnim ||
+      bossCurrentHp <= 0
+    ) {
+      return;
+    }
+    const tickMs = isSpeedUp ? 500 : 1000;
+    const intervalId = window.setInterval(() => {
+      setBossTimeLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(intervalId);
+          phonkMusic.stop();
+          sound.playBossTaunt();
+          setBossDefeatReason('timeout');
+          setBossTimedOut(true);
+          setBossDialogue(level.boss!.timeoutLine);
+          setSelected(null);
+          setActiveDrag(null);
+          pendingRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, tickMs);
+    return () => window.clearInterval(intervalId);
+  }, [
+    isBossLevel,
+    level.boss,
+    isTimeFrozen,
+    isSpeedUp,
+    solvedInfo,
+    bossTimedOut,
+    bossHitAnim,
+    bossHealAnim,
+    bossCurrentHp,
+  ]);
 
   useEffect(() => {
     clearFlyTimers();
     const startEq = cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial);
     setBossPhaseIndex(0);
     setBossHitAnim(false);
+    setBossHealAnim(false);
+    setBossHasHealed(false);
+    setBossPreHealOneHp(false);
     setBossStrikeAnim(false);
     setBossDialogue(level.boss?.introLine ?? '');
+    setBossTimeLeft(level.boss?.timeLimitSeconds ?? 90);
+    setBossMistakes(0);
+    setBossTimedOut(false);
+    setBossDefeatReason('timeout');
+    setTimeBonusFlash(false);
+    setTimePenaltyFlash(false);
+    bossTauntIdxRef.current = 0;
     setEqState(startEq);
     setUndoStack([]);
     setTotalMoves(0);
@@ -249,7 +371,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {
         equationText: formatEquation(startEq, level.defaultVisual === 'pure_symbols'),
         ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
-        explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+        explanation: buildInitialExplanation(level),
         stateSnapshot: cloneState(startEq),
       },
     ]);
@@ -268,7 +390,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setShowMobileLog(false);
     setTutorialIndex(level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null);
     return clearFlyTimers;
-  }, [level, isBossLevel, clearFlyTimers]);
+  }, [level, isBossLevel, clearFlyTimers, buildInitialExplanation]);
 
   const pureSymbolsMode = visualStyle === 'pure_symbols' || isPureSymbolState(eqState);
   const currentEquationText = useMemo(
@@ -404,7 +526,48 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       flyMeta?: { term: Term; fromSide: Side; dragKind: DragKind; originPoint?: { x: number; y: number } },
       combineSide?: Side
     ) => {
+      // Helper for Bab 3 Freeze-Penalty wrong move (-30s, max 4 mistakes)
+      const applyFreezePenalty = (reasonText: string) => {
+        if (!level.boss) return;
+        sound.playNudge();
+        sound.playBossTaunt();
+        flashKiboMood('oops', 2000);
+        const nextMistakes = bossMistakes + 1;
+        const nextTime = Math.max(0, bossTimeLeft - bossPenaltySec);
+        setBossMistakes(nextMistakes);
+        setBossTimeLeft(nextTime);
+        setTimePenaltyFlash(true);
+        if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
+        timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
+        setSelected(null);
+        setActiveDrag(null);
+        pendingRef.current = null;
+
+        if (nextMistakes >= maxBossMistakes || nextTime <= 0) {
+          phonkMusic.stop();
+          setBossDefeatReason('mistakes');
+          setBossTimedOut(true);
+          setBossDialogue(level.boss.timeoutLine);
+          setFeedback({
+            text: `Salah pindah ke-${nextMistakes}/${maxBossMistakes}! Waktumu langsung habis!`,
+            tone: 'warn',
+          });
+        } else {
+          setBossDialogue(
+            `Hoaaam... salah pindah tuh! Ku-potong ${bossPenaltySec} detik, sisa kesempatan salahmu ${maxBossMistakes - nextMistakes}× lagi...`
+          );
+          setFeedback({
+            text: `${reasonText} (−${bossPenaltySec} dtk · Salah ${nextMistakes}/${maxBossMistakes})`,
+            tone: 'warn',
+          });
+        }
+      };
+
       if (!result.ok || !result.nextState) {
+        if (isTimeFrozen && level.boss) {
+          applyFreezePenalty(level.boss.kiboLines.gimmickAlert);
+          return;
+        }
         sound.playNudge();
         flashKiboMood('oops', 1500);
         setFeedback({
@@ -412,6 +575,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           tone: 'warn',
         });
         return;
+      }
+
+      // Bab 3 Freeze-Penalty: catch wrong/counterproductive transpose or flip moves!
+      if (isTimeFrozen && level.boss && (moveKind === 'transpose' || moveKind === 'flip')) {
+        const beforeDist = computeEquationComplexity(eqState);
+        const afterDist = computeEquationComplexity(result.nextState);
+        if (afterDist >= beforeDist) {
+          applyFreezePenalty(level.boss.kiboLines.gimmickAlert);
+          return;
+        }
       }
 
       if (moveKind === 'transpose' && flyMeta) {
@@ -487,17 +660,81 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           flashKiboMood('excited', 2200);
 
           if (nextPhaseIdx < totalPhases) {
-            const hitLine =
-              level.boss.hitLines[bossPhaseIndex] || 'Aduh! Lanjut ke fase berikutnya!';
+            const isOrcaHealTrigger =
+              bossGimmick === 'heal_once' && !bossHasHealed && nextPhaseIdx === 2;
+            const nextHpAfterHit =
+              bossGimmick === 'heal_once' && !bossHasHealed
+                ? Math.max(1, 3 - nextPhaseIdx)
+                : totalPhases - nextPhaseIdx;
+            const willEnterSpeedOrCosmic =
+              nextHpAfterHit === 1 &&
+              (bossGimmick === 'speed_enrage' || bossGimmick === 'cosmic_many_hp');
+
+            const hitLine = willEnterSpeedOrCosmic && level.boss.enrageGimmickLine
+              ? level.boss.enrageGimmickLine
+              : level.boss.hitLines[bossPhaseIndex] || 'Aduh! Lanjut ke fase berikutnya!';
+
             window.setTimeout(() => {
               sound.playBossHit();
               setBossHitAnim(true);
+              if (isOrcaHealTrigger) {
+                setBossPreHealOneHp(true);
+              }
               setBossDialogue(hitLine);
+
+              if (!isTimeFrozen) {
+                setBossTimeLeft((prev) => Math.min(totalBossTime, prev + 15));
+                setTimeBonusFlash(true);
+                if (timeBonusTimerRef.current) window.clearTimeout(timeBonusTimerRef.current);
+                timeBonusTimerRef.current = window.setTimeout(() => setTimeBonusFlash(false), 1150);
+              }
+
               setFeedback({
-                text: `Kena telak! ${level.boss!.name} kehilangan 1 HP — siap untuk fase ${nextPhaseIdx + 1}!`,
-                tone: 'good',
+                text: willEnterSpeedOrCosmic
+                  ? level.boss!.kiboLines.gimmickAlert
+                  : `${level.boss!.kiboLines.hitCheer}${isTimeFrozen ? '' : ' (+15 dtk bonus!)'}`,
+                tone: willEnterSpeedOrCosmic ? 'warn' : 'good',
               });
             }, 240);
+
+            if (isOrcaHealTrigger) {
+              // Bab 4 Kapten Orca reaches 1 HP → gets angry and HEALS FULL HP ONCE!
+              window.setTimeout(() => {
+                sound.playBossTaunt();
+                setBossHitAnim(false);
+                setBossStrikeAnim(false);
+                setBossPreHealOneHp(false);
+                setBossHasHealed(true);
+                setBossHealAnim(true);
+                setBossPhaseIndex(nextPhaseIdx);
+                setBossDialogue(level.boss!.healLine || hitLine);
+                flashKiboMood('oops', 2600);
+                setFeedback({
+                  text: level.boss!.kiboLines.gimmickAlert,
+                  tone: 'warn',
+                });
+              }, 950);
+
+              window.setTimeout(() => {
+                const nextPhase = level.boss!.phases[nextPhaseIdx];
+                const nextFresh = cloneState(nextPhase.initial);
+                setBossHealAnim(false);
+                setEqState(nextFresh);
+                setUndoStack([]);
+                setSelected(null);
+                setActiveHint(null);
+                setHistory((prev) => [
+                  ...prev,
+                  {
+                    equationText: formatEquation(nextFresh, pureSymbolsMode),
+                    ruleLabel: nextPhase.label,
+                    explanation: 'Kapten Orca memulihkan HP penuh! Selesaikan fase baru ini!',
+                    stateSnapshot: cloneState(nextFresh),
+                  },
+                ]);
+              }, 1900);
+              return;
+            }
 
             window.setTimeout(() => {
               const nextPhase = level.boss!.phases[nextPhaseIdx];
@@ -514,7 +751,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 {
                   equationText: formatEquation(nextFresh, pureSymbolsMode),
                   ruleLabel: nextPhase.label,
-                  explanation: nextPhase.tip,
+                  explanation: 'Selesaikan persamaan fase ini — tekan Bantuan jika butuh petunjuk.',
                   stateSnapshot: cloneState(nextFresh),
                 },
               ]);
@@ -559,7 +796,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       onComplete,
       pureSymbolsMode,
       isBossLevel,
+      bossGimmick,
+      bossHasHealed,
       bossPhaseIndex,
+      bossMistakes,
+      bossTimeLeft,
+      maxBossMistakes,
+      bossPenaltySec,
+      isTimeFrozen,
+      totalBossTime,
       triggerFlyAnimation,
       tutorialIndex,
       flashKiboMood,
@@ -568,7 +813,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handlePointerStart = useCallback(
     (e: React.PointerEvent, term: Term, side: Side, dragKind: DragKind) => {
-      if (solvedInfo || bossHitAnim) return;
+      if (solvedInfo || bossHitAnim || bossHealAnim || bossTimedOut) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
 
       // Ensure Web Audio unlocks cleanly on mobile touch gesture
@@ -588,7 +833,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         dragKind,
       };
     },
-    [solvedInfo, bossHitAnim, phonkActive, bossIntensity]
+    [solvedInfo, bossHitAnim, bossHealAnim, bossTimedOut, phonkActive, bossIntensity]
   );
 
   useEffect(() => {
@@ -741,7 +986,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handleTileTap = useCallback(
     (term: Term, side: Side) => {
-      if (suppressClickRef.current || solvedInfo || bossHitAnim) return;
+      if (suppressClickRef.current || solvedInfo || bossHitAnim || bossTimedOut) return;
 
       if (selected) {
         if (selected.termId === term.id) {
@@ -761,11 +1006,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       sound.playPickup();
       setSelected({ termId: term.id, side });
     },
-    [selected, eqState, commitMove, solvedInfo, bossHitAnim]
+    [selected, eqState, commitMove, solvedInfo, bossHitAnim, bossTimedOut]
   );
 
   const handlePanClick = (panSide: Side) => {
-    if (!selected || solvedInfo || bossHitAnim) return;
+    if (!selected || solvedInfo || bossHitAnim || bossTimedOut) return;
     if (selected.side !== panSide) {
       const term = eqState[selected.side].find((t) => t.id === selected.termId);
       if (term && term.kind !== 'group') {
@@ -802,7 +1047,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     const fresh = cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial);
     setBossPhaseIndex(0);
     setBossHitAnim(false);
+    setBossHealAnim(false);
+    setBossHasHealed(false);
+    setBossPreHealOneHp(false);
     setBossDialogue(level.boss?.introLine ?? '');
+    setBossTimeLeft(totalBossTime);
+    setBossMistakes(0);
+    setBossTimedOut(false);
+    setBossDefeatReason('timeout');
+    setTimeBonusFlash(false);
+    setTimePenaltyFlash(false);
+    bossTauntIdxRef.current = 0;
     setEqState(fresh);
     setUndoStack([]);
     setTotalMoves(0);
@@ -810,7 +1065,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {
         equationText: formatEquation(fresh, pureSymbolsMode),
         ruleLabel: isBossLevel ? level.boss!.phases[0].label : 'Persamaan Awal',
-        explanation: isBossLevel ? level.boss!.phases[0].tip : level.tip,
+        explanation: buildInitialExplanation(level),
         stateSnapshot: cloneState(fresh),
       },
     ]);
@@ -829,7 +1084,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   const handleBossTaunt = () => {
-    const line = BOSS_TAUNTS[bossTauntIdxRef.current % BOSS_TAUNTS.length];
+    const lines = level.boss?.tauntLines;
+    if (!lines || lines.length === 0) return;
+    const line = lines[bossTauntIdxRef.current % lines.length];
     bossTauntIdxRef.current += 1;
     setBossDialogue(line);
   };
@@ -954,9 +1211,63 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return ids;
   }, [activeHint, activeTutorialStep]);
 
+  const defaultKiboMessage = isBossLevel && level.boss
+    ? level.boss.kiboLines.intro
+    : isStageOne
+      ? currentTip
+      : 'Ayo pecahkan sendiri dulu! Kalau butuh petunjuk, tekan tombol Bantuan.';
+
   return (
     <div className="relative min-h-[100dvh] flex flex-col game-canvas-bg text-[#0D354C]">
       <BeachBackdrop />
+
+      {/* BAB 5 CTHULHU 1-HP COSMIC DIMENSION OVERLAY */}
+      {cosmicMode && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[1] overflow-hidden cosmic-nebula-overlay transition-opacity duration-500"
+          aria-hidden="true"
+        >
+          {/* Swirling Galaxy Vortex */}
+          <svg
+            viewBox="0 0 320 320"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] h-[540px] opacity-30 cosmic-vortex"
+          >
+            <circle cx="160" cy="160" r="140" fill="none" stroke="#E879F9" strokeWidth="2.5" strokeDasharray="16 14" />
+            <circle cx="160" cy="160" r="102" fill="none" stroke="#22D3EE" strokeWidth="2" strokeDasharray="10 12" />
+            <circle cx="160" cy="160" r="64" fill="none" stroke="#FEF08A" strokeWidth="1.8" strokeDasharray="8 10" />
+          </svg>
+
+          {/* Twinkling Cosmic Stars */}
+          {COSMIC_STARS.map((st, idx) => (
+            <span
+              key={idx}
+              style={
+                {
+                  left: st.left,
+                  top: st.top,
+                  width: `${st.size}px`,
+                  height: `${st.size}px`,
+                  backgroundColor: st.color,
+                  boxShadow: `0 0 10px ${st.color}`,
+                  '--star-dur': st.dur,
+                  '--star-delay': st.delay,
+                } as React.CSSProperties
+              }
+              className="absolute rounded-full cosmic-star-twinkle"
+            />
+          ))}
+
+          {/* Shooting Cosmic Meteors */}
+          <span
+            style={{ top: '14%', right: '10%', '--met-dur': '3.4s', '--met-delay': '0s' } as React.CSSProperties}
+            className="absolute w-24 h-[2px] rounded-full bg-gradient-to-l from-[#22D3EE] via-[#F0ABFC] to-transparent cosmic-meteor"
+          />
+          <span
+            style={{ top: '38%', right: '18%', '--met-dur': '4.2s', '--met-delay': '1.4s' } as React.CSSProperties}
+            className="absolute w-28 h-[2px] rounded-full bg-gradient-to-l from-[#FEF08A] via-[#E879F9] to-transparent cosmic-meteor"
+          />
+        </div>
+      )}
 
       {/* COASTAL ANDROID GAME TOP HUD BAR */}
       <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/92 backdrop-blur-md border-b-2 border-[#7DD3FC]/55 px-3 sm:px-5 flex items-center justify-between gap-2.5 text-white shadow-md">
@@ -1017,9 +1328,21 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               boss={level.boss}
               chapterId={level.chapterId}
               phaseIndex={bossPhaseIndex}
+              currentHp={bossCurrentHp}
+              maxHp={bossMaxHp}
               isHit={bossHitAnim}
+              isHealAnim={bossHealAnim}
+              isSpeedUp={isSpeedUp}
+              isTimeFrozen={isTimeFrozen}
+              cosmicMode={cosmicMode}
+              mistakesUsed={bossMistakes}
+              maxMistakes={isTimeFrozen ? maxBossMistakes : 0}
               dialogue={bossDialogue}
               phonkActive={phonkActive}
+              timeLeftSeconds={bossTimeLeft}
+              totalTimeSeconds={totalBossTime}
+              timeBonusFlash={timeBonusFlash}
+              timePenaltyFlash={timePenaltyFlash}
               onBossTaunt={handleBossTaunt}
             />
           )}
@@ -1060,7 +1383,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             </div>
           </div>
 
-          {/* KIBO COMPACT INTERACTIVE HELPER STRIP */}
+          {/* KIBO COMPACT INTERACTIVE HELPER STRIP (NO SPOILER ON STAGE 2-20, UNIQUE PER BOSS!) */}
           {!activeTutorialStep && (
             <div
               className={`rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-snug border-2 flex items-center gap-3 transition-colors shadow-sm ${
@@ -1068,21 +1391,30 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   ? 'bg-[#FFF1F2] border-[#FDA4AF] text-[#9F1239]'
                   : feedback?.tone === 'good'
                     ? 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]'
-                    : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
+                    : cosmicMode
+                      ? 'bg-[#2E1065]/92 border-[#E879F9] text-[#FAF5FF]'
+                      : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
               }`}
             >
               <KiboAvatar
                 size="sm"
                 mood={kiboMood}
                 interactive
+                customQuips={isBossLevel ? level.boss?.kiboLines.tapLines : undefined}
                 onInteract={(quip) => {
                   flashKiboMood('giggle', 1300);
                   setFeedback({ text: quip, tone: 'good' });
                 }}
               />
               <div className="flex-1 min-w-0">
-                <span className="font-extrabold text-[11px] text-[#0284C7] block">Kibo</span>
-                <span className="font-medium">{feedback ? feedback.text : currentTip}</span>
+                <span
+                  className={`font-extrabold text-[11px] block ${
+                    cosmicMode && !feedback ? 'text-[#F0ABFC]' : 'text-[#0284C7]'
+                  }`}
+                >
+                  Kibo
+                </span>
+                <span className="font-medium">{feedback ? feedback.text : defaultKiboMessage}</span>
               </div>
               {level.tutorialSteps && level.tutorialSteps.length > 0 && (
                 <button
@@ -1096,8 +1428,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             </div>
           )}
 
-          {/* TROPICAL LAGOON & DRIFTWOOD BALANCE BOARD */}
-          <div className="relative rounded-3xl beach-board-frame p-3 sm:p-5 overflow-hidden">
+          {/* TROPICAL LAGOON / COSMIC BALANCE BOARD */}
+          <div
+            className={`relative rounded-3xl p-3 sm:p-5 overflow-hidden transition-all duration-500 ${
+              cosmicMode ? 'cosmic-board-frame' : 'beach-board-frame'
+            }`}
+          >
             {/* GOLDEN ENERGY STRIKE BEAM WHEN BOSS TAKES A HIT */}
             <AnimatePresence>
               {bossStrikeAnim && (
@@ -1655,6 +1991,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           hasNextLevel={hasNextLevel}
           onNextLevel={onNextLevel}
           onReplay={handleReset}
+          onExit={onExit}
+        />
+      )}
+
+      {/* BOSS TIMEOUT DEFEAT MODAL (BOSS MOCKS THE PLAYER!) */}
+      {bossTimedOut && !solvedInfo && isBossLevel && level.boss && (
+        <BossDefeatModal
+          boss={level.boss}
+          chapterId={level.chapterId}
+          reason={bossDefeatReason}
+          onRetry={handleReset}
           onExit={onExit}
         />
       )}

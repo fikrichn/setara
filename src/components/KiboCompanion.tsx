@@ -1,9 +1,24 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Crown, Hand, Heart, RotateCcw, Star } from 'lucide-react';
+import {
+  ChevronRight,
+  Clock,
+  Crown,
+  Hand,
+  Heart,
+  RotateCcw,
+  Snowflake,
+  Sparkles,
+  Star,
+  Zap,
+} from 'lucide-react';
 import { sound } from '../game/sound';
 import { BossConfig, TutorialStep } from '../game/types';
-import { AnimatedBoss, BossAnimState, BossVariant } from './AnimatedBoss';
+import {
+  AnimatedBoss,
+  BossAnimState,
+  getBossVariantForChapter,
+} from './AnimatedBoss';
 import { AnimatedKibo, KiboMood } from './AnimatedKibo';
 
 export type { KiboMood };
@@ -15,6 +30,7 @@ export const KiboAvatar: React.FC<{
   crown?: boolean;
   highFiveRaised?: boolean;
   interactive?: boolean;
+  customQuips?: string[];
   onInteract?: (quip: string) => void;
 }> = ({
   size = 'md',
@@ -23,6 +39,7 @@ export const KiboAvatar: React.FC<{
   crown = false,
   highFiveRaised = false,
   interactive = true,
+  customQuips,
   onInteract,
 }) => {
   const resolvedMood: KiboMood = mood ?? (animate ? 'happy' : 'idle');
@@ -33,6 +50,7 @@ export const KiboAvatar: React.FC<{
       crown={crown}
       highFiveRaised={highFiveRaised}
       interactive={interactive}
+      customQuips={customQuips}
       onInteract={onInteract}
     />
   );
@@ -116,9 +134,21 @@ interface BossArenaBannerProps {
   boss: BossConfig;
   chapterId: number;
   phaseIndex: number;
+  currentHp: number;
+  maxHp: number;
   isHit: boolean;
+  isHealAnim?: boolean;
+  isSpeedUp?: boolean;
+  isTimeFrozen?: boolean;
+  cosmicMode?: boolean;
+  mistakesUsed?: number;
+  maxMistakes?: number;
   dialogue: string;
   phonkActive: boolean;
+  timeLeftSeconds: number;
+  totalTimeSeconds: number;
+  timeBonusFlash?: boolean;
+  timePenaltyFlash?: boolean;
   onBossTaunt: () => void;
 }
 
@@ -129,33 +159,161 @@ const EQ_BARS = [
   { dur: '0.46s', delay: '0.07s' },
 ];
 
+const STAGE_BOSS_THEMES: Record<
+  number,
+  {
+    bgClass: string;
+    borderClass: string;
+    tagLabel: string;
+    tagBg: string;
+    accentColor: string;
+  }
+> = {
+  0: {
+    bgClass: 'bg-gradient-to-r from-[#4C1D95] via-[#6D28D9] to-[#0E7490]',
+    borderClass: 'border-[#F0ABFC]',
+    tagLabel: 'BOS BAB 0 · CUMI CILIK',
+    tagBg: 'bg-[#F0ABFC]/20 border-[#F0ABFC]/60 text-[#FDF4FF]',
+    accentColor: '#F0ABFC',
+  },
+  1: {
+    bgClass: 'bg-gradient-to-r from-[#0E7490] via-[#155E75] to-[#B45309]',
+    borderClass: 'border-[#FDE047]',
+    tagLabel: 'BOS BAB 1 · KAPTEN BUNTAL',
+    tagBg: 'bg-[#FDE047]/20 border-[#FDE047]/60 text-[#FEF9C3]',
+    accentColor: '#FDE047',
+  },
+  2: {
+    bgClass: 'bg-gradient-to-r from-[#991B1B] via-[#C2410C] to-[#B45309]',
+    borderClass: 'border-[#FBBF24]',
+    tagLabel: 'BOS BAB 2 · KEPITING EMAS',
+    tagBg: 'bg-[#FBBF24]/20 border-[#FBBF24]/60 text-[#FEF3C7]',
+    accentColor: '#FBBF24',
+  },
+  3: {
+    bgClass: 'bg-gradient-to-r from-[#115E59] via-[#0F766E] to-[#1E3A5F]',
+    borderClass: 'border-[#5EEAD4]',
+    tagLabel: 'BOS BAB 3 · KURA MERIAM',
+    tagBg: 'bg-[#5EEAD4]/20 border-[#5EEAD4]/60 text-[#CCFBF1]',
+    accentColor: '#5EEAD4',
+  },
+  4: {
+    bgClass: 'bg-gradient-to-r from-[#0C4A6E] via-[#0F172A] to-[#0369A1]',
+    borderClass: 'border-[#38BDF8]',
+    tagLabel: 'BOS BAB 4 · KAPTEN ORCA',
+    tagBg: 'bg-[#38BDF8]/20 border-[#38BDF8]/60 text-[#E0F2FE]',
+    accentColor: '#38BDF8',
+  },
+  5: {
+    bgClass: 'bg-gradient-to-r from-[#3B0764] via-[#581C87] to-[#115E59]',
+    borderClass: 'border-[#E879F9]',
+    tagLabel: 'BOS AKHIR · EVOLUSI BAB 0',
+    tagBg: 'bg-[#E879F9]/25 border-[#E879F9]/70 text-[#FAF5FF]',
+    accentColor: '#E879F9',
+  },
+};
+
+function formatCountdown(sec: number): string {
+  const clamped = Math.max(0, Math.floor(sec));
+  const m = Math.floor(clamped / 60);
+  const s = clamped % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
   boss,
   chapterId,
   phaseIndex,
+  currentHp,
+  maxHp,
   isHit,
+  isHealAnim = false,
+  isSpeedUp = false,
+  isTimeFrozen = false,
+  cosmicMode = false,
+  mistakesUsed = 0,
+  maxMistakes = 0,
   dialogue,
   phonkActive,
+  timeLeftSeconds,
+  totalTimeSeconds,
+  timeBonusFlash = false,
+  timePenaltyFlash = false,
   onBossTaunt,
 }) => {
-  const totalHp = boss.phases.length;
-  const currentHp = Math.max(0, totalHp - phaseIndex);
-  const currentPhase = boss.phases[Math.min(phaseIndex, totalHp - 1)];
+  const totalPhases = boss.phases.length;
+  const currentPhase = boss.phases[Math.min(phaseIndex, totalPhases - 1)];
 
-  const variant: BossVariant = boss.artwork.includes('raja_timbangan') ? 'owl' : 'turtle';
+  const variant = getBossVariantForChapter(chapterId);
+  const theme = STAGE_BOSS_THEMES[chapterId] ?? STAGE_BOSS_THEMES[0];
   const bossState: BossAnimState =
-    currentHp <= 0 ? 'defeated' : isHit ? 'hit' : currentHp === 1 ? 'enraged' : 'idle';
+    currentHp <= 0 ? 'defeated' : isHit ? 'hit' : currentHp === 1 || isHealAnim ? 'enraged' : 'idle';
+  const timePct = Math.max(0, Math.min(100, (timeLeftSeconds / Math.max(1, totalTimeSeconds)) * 100));
+  const isTimeCritical = timeLeftSeconds <= 15 || (isTimeFrozen && maxMistakes > 0 && mistakesUsed >= maxMistakes - 1);
+  const isTimeWarn = !isTimeCritical && (timeLeftSeconds <= 30 || isSpeedUp);
 
   return (
     <div
-      className={`relative rounded-2xl text-white border-2 p-3 sm:p-3.5 flex items-center gap-3.5 shadow-lg transition-colors ${
+      className={`relative rounded-2xl text-white border-2 p-3 sm:p-4 flex items-center gap-3.5 shadow-lg transition-colors overflow-hidden ${
         isHit
           ? 'animate-boss-shake bg-[#7F1D1D] border-[#FCA5A5]'
-          : bossState === 'enraged'
-            ? 'bg-gradient-to-r from-[#4C1D3D] to-[#701A3B] border-[#FB7185]'
-            : 'bg-gradient-to-r from-[#0F3854] to-[#165378] border-[#FBBF24]'
+          : isHealAnim
+            ? 'animate-boss-heal bg-gradient-to-r from-[#064E3B] via-[#0F766E] to-[#0C4A6E] border-[#34D399]'
+            : cosmicMode
+              ? 'bg-gradient-to-r from-[#1E1045] via-[#581C87] to-[#0E7490] border-[#E879F9] shadow-[0_0_28px_rgba(232,121,249,0.55)]'
+              : `${theme.bgClass} ${bossState === 'enraged' ? 'border-[#FDE047]' : theme.borderClass}`
       }`}
     >
+      {/* Dedicated Stage 0-5 Subtle Kid-Friendly Animated Backdrop Accents */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-25" aria-hidden="true">
+        {chapterId === 0 && (
+          <>
+            <span className="absolute right-8 top-2 w-4 h-4 rounded-full border-2 border-[#F0ABFC] anime-bubble-rise" />
+            <span
+              className="absolute right-20 bottom-2 w-3 h-3 rounded-full border-2 border-[#BAE6FD] anime-bubble-rise"
+              style={{ animationDelay: '0.9s' }}
+            />
+          </>
+        )}
+        {chapterId === 1 && (
+          <svg viewBox="0 0 240 40" className="absolute bottom-0 right-0 w-56 h-8 anime-wave-slow">
+            <path d="M0 24 Q 30 8 60 24 T 120 24 T 180 24 T 240 24 L240 40 L0 40 Z" fill="#FDE047" />
+          </svg>
+        )}
+        {chapterId === 2 && (
+          <>
+            <span className="absolute right-10 top-3 w-3 h-3 rounded-full bg-[#FEF08A] anime-gold-glint" />
+            <span
+              className="absolute right-24 top-6 w-2.5 h-2.5 rounded-full bg-[#FBBF24] anime-gold-glint"
+              style={{ animationDelay: '0.5s' }}
+            />
+            <span
+              className="absolute right-16 bottom-3 w-3 h-3 rounded-full bg-[#FEF08A] anime-gold-glint"
+              style={{ animationDelay: '0.9s' }}
+            />
+          </>
+        )}
+        {chapterId === 3 && (
+          <svg viewBox="0 0 240 40" className="absolute bottom-0 right-0 w-56 h-8 anime-wave-mid">
+            <path d="M0 22 Q 40 6 80 22 T 160 22 T 240 22 L240 40 L0 40 Z" fill="#5EEAD4" />
+          </svg>
+        )}
+        {chapterId === 4 && (
+          <svg viewBox="0 0 240 40" className="absolute bottom-0 right-0 w-60 h-9 anime-wave-mid">
+            <path d="M0 20 Q 30 4 60 20 T 120 20 T 180 20 T 240 20 L240 40 L0 40 Z" fill="#38BDF8" />
+          </svg>
+        )}
+        {chapterId === 5 && (
+          <svg
+            viewBox="0 0 100 100"
+            className={`absolute -right-6 -top-6 w-32 h-32 ${cosmicMode ? 'cosmic-vortex opacity-90' : 'anime-gear-cw'}`}
+          >
+            <circle cx="50" cy="50" r="38" fill="none" stroke="#E879F9" strokeWidth="3" strokeDasharray="8 8" />
+            <circle cx="50" cy="50" r="24" fill="none" stroke="#22D3EE" strokeWidth="2.5" strokeDasharray="5 6" />
+          </svg>
+        )}
+      </div>
+
       {/* Floating -1 HP Damage Number on Boss Hit */}
       {isHit && (
         <div
@@ -166,28 +324,111 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
         </div>
       )}
 
-      <AnimatedBoss
-        variant={variant}
-        chapterId={chapterId}
-        state={bossState}
-        phonkPlaying={phonkActive}
-        onTaunt={onBossTaunt}
-      />
+      {/* Floating HP FULL HEAL Banner for Bab 4 Orca */}
+      {isHealAnim && (
+        <div className="pointer-events-none absolute left-10 -top-1 z-30 font-display font-extrabold text-base sm:text-xl text-[#6EE7B7] drop-shadow-[0_2px_10px_rgba(16,185,129,0.95)] animate-damage-float whitespace-nowrap">
+          HP PULIH PENUH!
+        </div>
+      )}
 
-      <div className="flex-1 min-w-0">
+      <div className="relative z-10 shrink-0">
+        <AnimatedBoss
+          variant={variant}
+          chapterId={chapterId}
+          state={bossState}
+          phonkPlaying={phonkActive}
+          cosmicMode={cosmicMode}
+          size="lg"
+          onTaunt={onBossTaunt}
+        />
+      </div>
+
+      <div className="relative z-10 flex-1 min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#FEF08A] min-w-0">
-            <Crown className="w-3.5 h-3.5 shrink-0 text-[#FBBF24]" aria-hidden="true" />
-            <span className="truncate">{boss.name}</span>
-            <span aria-hidden="true">·</span>
-            <span className="text-[#BAE6FD] font-semibold truncate">{currentPhase?.label}</span>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-[#FEF08A] min-w-0">
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-extrabold tracking-wide ${theme.tagBg}`}
+            >
+              <Crown className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span>{theme.tagLabel}</span>
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-white/15 text-[10px] font-extrabold text-[#FEF9C3]">
+              Sifat: {boss.personality}
+            </span>
+            <span className="px-2 py-0.5 rounded-lg bg-black/25 border border-white/20 text-[10px] font-extrabold text-[#E0F2FE]">
+              {boss.gimmickLabel}
+            </span>
+            {cosmicMode && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#A855F7]/75 border border-[#F0ABFC] text-[10px] font-extrabold text-white animate-pulse">
+                <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
+                <span>MODE KOSMIK!</span>
+              </span>
+            )}
+            <span className="text-[#E0F2FE] font-semibold truncate">{currentPhase?.label}</span>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Bab 3 Mistake Counter Badge */}
+            {isTimeFrozen && maxMistakes > 0 && (
+              <div
+                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border font-mono text-[11px] font-extrabold tabular-nums ${
+                  mistakesUsed >= maxMistakes - 1
+                    ? 'bg-[#991B1B]/90 border-[#FCA5A5] text-[#FEF08A] animate-pulse'
+                    : 'bg-[#0C4A6E]/85 border-[#7DD3FC]/70 text-[#E0F2FE]'
+                }`}
+                aria-label={`Kesalahan ${mistakesUsed} dari ${maxMistakes}`}
+              >
+                <span>Salah {mistakesUsed}/{maxMistakes}</span>
+              </div>
+            )}
+
+            {/* Boss Countdown Timer Badge */}
+            <div
+              className={`relative inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-mono text-xs font-extrabold tabular-nums transition-colors ${
+                isTimeCritical
+                  ? 'bg-[#991B1B]/90 border-[#FCA5A5] text-[#FEF08A] animate-pulse'
+                  : isTimeFrozen
+                    ? 'bg-[#0369A1]/90 border-[#7DD3FC] text-[#E0F2FE]'
+                    : isSpeedUp
+                      ? 'bg-[#9A3412]/92 border-[#FDE047] text-[#FEF08A] animate-pulse'
+                      : isTimeWarn
+                        ? 'bg-[#92400E]/85 border-[#FDE047] text-[#FEF9C3]'
+                        : 'bg-[#082F49]/75 border-[#7DD3FC]/55 text-white'
+              }`}
+              aria-label={`Sisa waktu ${formatCountdown(timeLeftSeconds)}`}
+            >
+              {isTimeFrozen ? (
+                <Snowflake className="w-3.5 h-3.5 shrink-0 text-[#BAE6FD]" aria-hidden="true" />
+              ) : isSpeedUp ? (
+                <Zap className="w-3.5 h-3.5 shrink-0 text-[#FDE047]" aria-hidden="true" />
+              ) : (
+                <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              )}
+              <span>{formatCountdown(timeLeftSeconds)}</span>
+              {isTimeFrozen && (
+                <span className="ml-0.5 text-[10px] font-extrabold text-[#BAE6FD]">BEKU</span>
+              )}
+              {isSpeedUp && (
+                <span className="ml-0.5 text-[10px] font-extrabold text-[#FEF08A]">
+                  {cosmicMode ? '2× KOSMIK' : '2× CEPAT'}
+                </span>
+              )}
+              {timeBonusFlash && (
+                <span className="pointer-events-none absolute -top-5 right-0 text-[11px] font-extrabold text-[#86EFAC] drop-shadow animate-damage-float whitespace-nowrap">
+                  +15 dtk!
+                </span>
+              )}
+              {timePenaltyFlash && (
+                <span className="pointer-events-none absolute -top-5 right-0 text-[11px] font-extrabold text-[#FCA5A5] drop-shadow animate-damage-float whitespace-nowrap">
+                  −{boss.penaltySeconds ?? 30} dtk!
+                </span>
+              )}
+            </div>
+
             {/* Live Non-Disableable Phonk Beat Indicator */}
             {phonkActive && (
               <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2B1226]/80 border border-[#FB7185]/60 text-[11px] font-extrabold text-[#FEF08A]"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2B1226]/80 border border-[#FB7185]/60 text-[11px] font-extrabold text-[#FEF08A]"
                 aria-label="Musik Phonk Bos sedang diputar"
               >
                 <span className="inline-flex items-end gap-[2px] h-3" aria-hidden="true">
@@ -210,29 +451,49 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
 
             {/* Boss HP Hearts */}
             <div
-              className="flex items-center gap-1.5"
-              aria-label={`Nyawa Bos ${currentHp} dari ${totalHp}`}
+              className="flex items-center gap-1"
+              aria-label={`Nyawa Bos ${currentHp} dari ${maxHp}`}
             >
               <div className="flex items-center gap-0.5">
-                {Array.from({ length: totalHp }).map((_, i) => (
+                {Array.from({ length: maxHp }).map((_, i) => (
                   <Heart
                     key={i}
-                    className={`w-4 h-4 transition-transform duration-200 ${
+                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-200 ${
                       i < currentHp
-                        ? 'text-[#FB7185] fill-[#FB7185] scale-100'
+                        ? isHealAnim
+                          ? 'text-[#34D399] fill-[#34D399] scale-115'
+                          : 'text-[#FB7185] fill-[#FB7185] scale-100'
                         : 'text-[#64748B] fill-transparent scale-75'
                     }`}
                   />
                 ))}
               </div>
               <span className="font-mono text-xs font-bold text-[#FEF08A] tabular-nums">
-                {currentHp}/{totalHp}
+                {currentHp}/{maxHp}
               </span>
             </div>
           </div>
         </div>
 
         <p className="mt-1 text-xs sm:text-sm text-[#F0F9FF] leading-snug">“{dialogue}”</p>
+
+        {/* Boss Countdown Progress Bar */}
+        <div className="mt-2 h-1.5 w-full rounded-full bg-black/30 overflow-hidden">
+          <div
+            style={{ width: `${timePct}%` }}
+            className={`h-full rounded-full transition-all duration-300 ${
+              isTimeCritical
+                ? 'bg-[#FB7185]'
+                : isTimeFrozen
+                  ? 'bg-[#38BDF8]'
+                  : cosmicMode
+                    ? 'bg-gradient-to-r from-[#E879F9] to-[#22D3EE]'
+                    : isSpeedUp || isTimeWarn
+                      ? 'bg-[#FBBF24]'
+                      : 'bg-[#5EEAD4]'
+            }`}
+          />
+        </div>
       </div>
     </div>
   );
@@ -420,13 +681,12 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
           ))}
         </div>
 
-        {/* Kibo Positive Reinforcement Speech */}
+        {/* Kibo Positive Reinforcement Speech (Unique Per Boss!) */}
         <div className="mt-3 rounded-2xl bg-[#EBF8FF] border border-[#BAE6FD] px-4 py-3 text-sm text-[#1E4E68] leading-snug">
           {highFived ? (
             <div className="flex flex-col items-center gap-2">
               <span>
-                <strong className="text-[#0284C7]">Kibo:</strong> “YEAY! TOS MANTAP! Kamu hebat banget
-                bisa ngalahin {boss.name}!”
+                <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.victoryPostTos}”
               </span>
               {resultNode ? (
                 <div className="inline-flex items-center justify-center rounded-xl bg-white/85 border border-[#BAE6FD] px-3 py-1.5">
@@ -438,8 +698,7 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
             </div>
           ) : (
             <span>
-              <strong className="text-[#0284C7]">Kibo:</strong> “Horeee! {boss.name} berhasil kamu
-              kalahkan! Ayo tos sama siripku dulu!”
+              <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.victoryPreTos}”
             </span>
           )}
         </div>
@@ -473,6 +732,100 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
               <span>Kembali ke Peta</span>
             </button>
           )}
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// =========================================================================
+// BOSS TIMEOUT DEFEAT MODAL (BOSS MOCKS THE PLAYER BY PERSONALITY!)
+// =========================================================================
+
+interface BossDefeatModalProps {
+  boss: BossConfig;
+  chapterId: number;
+  reason?: 'timeout' | 'mistakes';
+  onRetry: () => void;
+  onExit: () => void;
+}
+
+export const BossDefeatModal: React.FC<BossDefeatModalProps> = ({
+  boss,
+  chapterId,
+  reason = 'timeout',
+  onRetry,
+  onExit,
+}) => {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/75 backdrop-blur-xs p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="boss-defeat-title"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.82, y: 28 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+        className="relative w-full max-w-md rounded-3xl game-panel border-3 border-[#FB7185] p-6 sm:p-7 text-center shadow-2xl"
+      >
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFE4E6] border border-[#FDA4AF] text-xs font-extrabold text-[#BE123C]">
+          <Clock className="w-3.5 h-3.5" aria-hidden="true" />
+          <span>
+            {reason === 'mistakes' ? '4× SALAH PINDAH · WAKTU HABIS!' : 'WAKTU HABIS · KALAH!'}
+          </span>
+        </div>
+
+        <h2
+          id="boss-defeat-title"
+          className="mt-2 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]"
+        >
+          {boss.name} Mengejekmu!
+        </h2>
+
+        <div className="mt-4 flex justify-center">
+          <AnimatedBoss
+            chapterId={chapterId}
+            state="mocking"
+            phonkPlaying={false}
+            size="xl"
+            interactive={false}
+          />
+        </div>
+
+        {/* Boss Personality-Driven Mocking Speech */}
+        <div className="mt-4 rounded-2xl bg-[#FFF1F2] border-2 border-[#FDA4AF] px-4 py-3 text-sm text-[#881337] leading-snug">
+          <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[#BE123C] mb-0.5">
+            {boss.name} · Sifat {boss.personality}
+          </span>
+          <p className="font-semibold">“{boss.timeoutLine}”</p>
+        </div>
+
+        {/* Kibo Encouraging the Player (Unique Per Boss!) */}
+        <div className="mt-3 rounded-2xl bg-[#EBF8FF] border border-[#BAE6FD] px-3.5 py-2.5 flex items-center gap-3 text-left">
+          <AnimatedKibo size="sm" mood="oops" interactive={false} />
+          <p className="text-xs sm:text-sm text-[#1E4E68] leading-snug">
+            <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.defeatEncourage}”
+          </p>
+        </div>
+
+        <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
+          <button
+            type="button"
+            onClick={onExit}
+            className="game-btn-wood flex-1 min-h-[48px] px-4 rounded-xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
+          >
+            Kembali ke Peta
+          </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="game-btn-gold flex-1 inline-flex items-center justify-center gap-1.5 min-h-[48px] px-5 rounded-xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" aria-hidden="true" />
+            <span>Tantang Lagi!</span>
+          </button>
         </div>
       </motion.div>
     </div>

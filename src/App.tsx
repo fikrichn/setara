@@ -22,7 +22,8 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { PocketGuide } from './components/PocketGuide';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ExitConfirmModal, SettingsModal } from './components/SettingsExitModals';
-import { formatEquation, generatePracticeLevel } from './game/algebraEngine';
+import { TreasureMap } from './components/TreasureMap';
+import { generatePracticeLevel } from './game/algebraEngine';
 import { ALL_LEVELS, CHAPTERS, getNextLevel } from './game/levels';
 import { phonkMusic } from './game/phonkMusic';
 import { sound } from './game/sound';
@@ -554,140 +555,15 @@ export default function App() {
           </div>
         )}
 
-        {/* SCREEN 2: TROPICAL ISLAND WORLD / CHAPTER MAP (20 STAGES PER BAB) */}
+        {/* SCREEN 2: TREASURE MAP PARCHMENT WITH SWIMMING FISH, RED DASHED PATH & KIBO */}
         {screen === 'MAP' && (
-          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-5">
-            {/* Horizontal Chapter World Selector */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {CHAPTERS.map((ch) => {
-                const isActive = ch.id === activeChapter.id;
-                const done = ch.levels.filter((l) => progress.completed[l.id]).length;
-                const bossWon = ch.levels.some((l) => l.isBoss && progress.completed[l.id]);
-                return (
-                  <button
-                    key={ch.id}
-                    type="button"
-                    onClick={() => {
-                      sound.playPickup();
-                      setSelectedChapterId(ch.id);
-                    }}
-                    className={`min-h-[52px] px-4 rounded-2xl flex flex-col items-start justify-center shrink-0 transition-all cursor-pointer ${
-                      isActive ? 'game-btn-gold' : 'game-btn-wood'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 font-display font-extrabold text-sm whitespace-nowrap">
-                      <span>Bab {ch.id}</span>
-                      {bossWon && <Crown className="w-3.5 h-3.5" aria-hidden="true" />}
-                    </div>
-                    <span
-                      className={`text-[11px] font-mono font-bold tabular-nums ${
-                        isActive ? 'text-[#291802]/80' : 'text-[#35637A]'
-                      }`}
-                    >
-                      {done}/{ch.levels.length} stage
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected Chapter Island Card */}
-            <section className="rounded-3xl game-panel overflow-hidden">
-              <div className="p-5 sm:p-6 space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-4 border-b border-[#BAE6FD]">
-                  <div>
-                    <div className="text-xs font-extrabold text-[#0284C7]">
-                      {activeChapter.focusRule} · {activeChapter.levels.length} Stage
-                    </div>
-                    <h1 className="mt-1 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
-                      {activeChapter.title}
-                    </h1>
-                    <p className="mt-1 text-sm text-[#35637A]">{activeChapter.subtitle}</p>
-                  </div>
-                </div>
-
-                {/* 20 CHUNKY GAME STAGE NODES GRID */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 sm:gap-3">
-                  {activeChapter.levels.map((lvl) => {
-                    const stat = progress.completed[lvl.id];
-                    const isBoss = !!lvl.isBoss;
-                    const isStage1 = lvl.levelNumber === 1;
-
-                    return (
-                      <button
-                        key={lvl.id}
-                        type="button"
-                        onClick={() => {
-                          sound.playPickup();
-                          setActiveLevel(lvl);
-                        }}
-                        className={`rounded-2xl p-3 text-left flex flex-col justify-between gap-2 min-h-[108px] transition-transform active:scale-[0.97] cursor-pointer ${
-                          isBoss
-                            ? 'col-span-2 sm:col-span-2 md:col-span-2 bg-gradient-to-br from-[#0F3854] to-[#1D5B7F] border-2 border-[#F59E0B] text-white shadow-lg'
-                            : stat
-                              ? 'bg-[#ECFEFF] border-2 border-[#2DD4BF] text-[#0D354C] shadow-sm'
-                              : 'bg-[#FFFDF6] border-2 border-[#BAE6FD] text-[#0D354C] hover:border-[#0284C7]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span
-                            className={`font-display font-extrabold text-sm flex items-center gap-1 ${
-                              isBoss ? 'text-[#FEF08A]' : 'text-[#0D354C]'
-                            }`}
-                          >
-                            {isBoss ? (
-                              <>
-                                <Crown className="w-4 h-4 text-[#FBBF24]" aria-hidden="true" />
-                                <span>Stage 20 · BOS</span>
-                              </>
-                            ) : (
-                              <span>Stage {lvl.levelNumber}</span>
-                            )}
-                          </span>
-
-                          <div className="flex items-center gap-0.5" aria-hidden="true">
-                            {[1, 2, 3].map((s) => (
-                              <Star
-                                key={s}
-                                className={`w-3.5 h-3.5 ${
-                                  stat && s <= stat.stars
-                                    ? 'text-[#F59E0B] fill-[#FBBF24]'
-                                    : isBoss
-                                      ? 'text-[#475569]'
-                                      : 'text-[#CBD5E1]'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div
-                            className={`font-display font-bold text-xs leading-snug line-clamp-2 ${
-                              isBoss ? 'text-white' : 'text-[#0D354C]'
-                            }`}
-                          >
-                            {lvl.title}
-                          </div>
-                          <div
-                            className={`mt-1 font-mono text-[10px] font-bold truncate ${
-                              isBoss ? 'text-[#BAE6FD]' : 'text-[#3B6D84]'
-                            }`}
-                          >
-                            {isBoss
-                              ? `${lvl.boss?.phases.length ?? 3} Fase · ${lvl.boss?.name}`
-                              : isStage1
-                                ? 'Panduan Kibo'
-                                : formatEquation(lvl.initial, lvl.defaultVisual === 'pure_symbols')}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </div>
+          <TreasureMap
+            chapters={CHAPTERS}
+            activeChapter={activeChapter}
+            progress={progress}
+            onSelectChapter={setSelectedChapterId}
+            onSelectLevel={setActiveLevel}
+          />
         )}
 
         {/* SCREEN 3: PURE-RANDOM PROCEDURAL ARCADE PRACTICE MODE */}
@@ -735,7 +611,7 @@ export default function App() {
                     id: 'tantangan' as const,
                     label: 'TANTANGAN',
                     example: 'ax + b = dx + e · k(x + m) = dx + c',
-                    desc: 'Soal acak aljabar SMP dengan tanda kurung, pengali negatif, dan variabel di kedua ruas.',
+                    desc: 'Soal acak aljabar lengkap dengan tanda kurung, pengali negatif, dan variabel di kedua ruas.',
                     btnClass: 'game-btn-gold',
                   },
                 ]

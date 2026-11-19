@@ -457,6 +457,253 @@
   animation: damageFloat 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Unique Sea Boss Animations */
+@keyframes tentacleWave {
+  0%, 100% { transform: rotate(-9deg) skewX(-3deg); }
+  50% { transform: rotate(10deg) skewX(3deg); }
+}
+.anime-tentacle-a {
+  animation: tentacleWave 1.1s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+.anime-tentacle-b {
+  animation: tentacleWave 1.25s ease-in-out 0.25s infinite reverse;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+.anime-tentacle-c {
+  animation: tentacleWave 0.95s ease-in-out 0.45s infinite;
+  transform-box: fill-box;
+  transform-origin: top center;
+}
+
+@keyframes pufferInflate {
+  0%, 100% { transform: scale(0.95); }
+  45% { transform: scale(1.09); }
+  65% { transform: scale(1.06); }
+}
+.anime-puffer-inflate {
+  animation: pufferInflate 1.45s cubic-bezier(0.34, 1.4, 0.64, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes crabClawSnapL {
+  0%, 100% { transform: rotate(-10deg) translateY(0); }
+  35% { transform: rotate(14deg) translateY(-4px); }
+  55% { transform: rotate(-4deg) translateY(-1px); }
+  75% { transform: rotate(11deg) translateY(-3px); }
+}
+@keyframes crabClawSnapR {
+  0%, 100% { transform: rotate(10deg) translateY(0); }
+  35% { transform: rotate(-14deg) translateY(-4px); }
+  55% { transform: rotate(4deg) translateY(-1px); }
+  75% { transform: rotate(-11deg) translateY(-3px); }
+}
+.anime-claw-l {
+  animation: crabClawSnapL 1.35s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: right bottom;
+}
+.anime-claw-r {
+  animation: crabClawSnapR 1.35s ease-in-out 0.2s infinite;
+  transform-box: fill-box;
+  transform-origin: left bottom;
+}
+
+@keyframes goldGlint {
+  0%, 100% { opacity: 0.35; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+.anime-gold-glint {
+  animation: goldGlint 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes cannonRecoil {
+  0%, 62%, 100% { transform: translate(0, 0) rotate(0deg); }
+  70% { transform: translate(-4px, 2px) rotate(-6deg); }
+  84% { transform: translate(1px, -1px) rotate(2deg); }
+}
+.anime-cannon-recoil {
+  animation: cannonRecoil 1.9s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+@keyframes muzzleFlash {
+  0%, 64%, 85%, 100% { opacity: 0; transform: scale(0.3); }
+  70% { opacity: 1; transform: scale(1.25); }
+  78% { opacity: 0.65; transform: scale(1.55) translate(3px, -3px); }
+}
+.anime-muzzle-flash {
+  animation: muzzleFlash 1.9s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes orcaGlide {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-4px) rotate(3deg); }
+}
+.anime-orca-glide {
+  animation: orcaGlide 1.55s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes cthulhuWingL {
+  0%, 100% { transform: rotate(-7deg) scaleX(1); }
+  50% { transform: rotate(13deg) scaleX(0.92); }
+}
+@keyframes cthulhuWingR {
+  0%, 100% { transform: rotate(7deg) scaleX(1); }
+  50% { transform: rotate(-13deg) scaleX(0.92); }
+}
+.anime-cthulhu-wing-l {
+  animation: cthulhuWingL 1.3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: right center;
+}
+.anime-cthulhu-wing-r {
+  animation: cthulhuWingR 1.3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+@keyframes bubbleRise {
+  0% { opacity: 0; transform: translateY(8px) scale(0.7); }
+  30% { opacity: 0.75; }
+  100% { opacity: 0; transform: translateY(-22px) scale(1.1); }
+}
+.anime-bubble-rise {
+  animation: bubbleRise 2.2s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Swimming Fish Animations for Treasure Chapter Map */
+@keyframes fishSwim {
+  0%, 100% { transform: translateX(0px) translateY(0px) rotate(-2deg); }
+  25% { transform: translateX(4px) translateY(-2.5px) rotate(2deg); }
+  50% { transform: translateX(7px) translateY(0.5px) rotate(-1deg); }
+  75% { transform: translateX(3px) translateY(2px) rotate(1.5deg); }
+}
+.anime-fish-swim {
+  animation: fishSwim 2.4s ease-in-out infinite;
+}
+.anime-fish-swim-fast {
+  animation: fishSwim 1.4s ease-in-out infinite;
+}
+@keyframes fishTailWag {
+  0%, 100% { transform: rotate(-16deg); }
+  50% { transform: rotate(16deg); }
+}
+.anime-fish-tail {
+  animation: fishTailWag 0.52s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: right center;
+}
+@keyframes fishPatrol {
+  0% { transform: translateX(-8px) translateY(0px); }
+  50% { transform: translateX(18px) translateY(-4px); }
+  100% { transform: translateX(-8px) translateY(0px); }
+}
+.anime-fish-patrol {
+  animation: fishPatrol 4.6s ease-in-out infinite;
+}
+
+/* Boss Tap Reaction & Comic Pop Bubble */
+@keyframes bossComicPop {
+  0% { opacity: 0; transform: translateY(8px) scale(0.4) rotate(-8deg); }
+  25% { opacity: 1; transform: translateY(-4px) scale(1.12) rotate(3deg); }
+  80% { opacity: 1; transform: translateY(-7px) scale(1) rotate(-1deg); }
+  100% { opacity: 0; transform: translateY(-14px) scale(0.85) rotate(0deg); }
+}
+.animate-boss-comic {
+  animation: bossComicPop 820ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes bossTapSquash {
+  0% { transform: scale(1) rotate(0deg); }
+  22% { transform: scale(1.16, 0.86) rotate(-5deg); }
+  48% { transform: scale(0.92, 1.12) rotate(5deg); }
+  74% { transform: scale(1.05, 0.97) rotate(-2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.animate-boss-tap {
+  animation: bossTapSquash 520ms cubic-bezier(0.22, 1.25, 0.36, 1);
+}
+
+/* Antique Treasure Map Parchment Paper */
+.treasure-parchment {
+  background:
+    radial-gradient(circle at 12% 14%, rgba(217, 155, 67, 0.22) 0%, transparent 36%),
+    radial-gradient(circle at 88% 84%, rgba(180, 115, 42, 0.24) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, #FEF8E4 0%, #F8E8BE 68%, #ECD29B 100%);
+  border: 3px solid #A46B2B;
+  box-shadow:
+    inset 0 0 38px rgba(146, 90, 28, 0.26),
+    inset 0 2px 0 rgba(255, 253, 240, 0.8),
+    0 12px 28px rgba(12, 54, 80, 0.22);
+}
+
+/* Bab 4 Orca Heal Pulse */
+@keyframes bossHealGlow {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
+  35% { transform: scale(1.03); box-shadow: 0 0 32px rgba(52, 211, 153, 0.85); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
+}
+.animate-boss-heal {
+  animation: bossHealGlow 950ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Bab 5 Cthulhu 1-HP Cosmic Mode */
+.cosmic-nebula-overlay {
+  background:
+    radial-gradient(circle at 20% 25%, rgba(168, 85, 247, 0.45) 0%, transparent 46%),
+    radial-gradient(circle at 80% 30%, rgba(34, 211, 238, 0.38) 0%, transparent 44%),
+    radial-gradient(circle at 50% 78%, rgba(236, 72, 153, 0.32) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(15, 7, 36, 0.84) 0%, rgba(28, 10, 56, 0.82) 55%, rgba(10, 22, 54, 0.88) 100%);
+}
+.cosmic-board-frame {
+  background: linear-gradient(180deg, #1E1148 0%, #2D1260 52%, #131B4A 100%);
+  border: 3px solid #E879F9;
+  box-shadow:
+    0 0 34px rgba(192, 132, 252, 0.55),
+    0 12px 28px rgba(15, 7, 36, 0.55),
+    inset 0 2px 0 rgba(240, 171, 252, 0.4);
+}
+
+@keyframes cosmicTwinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+.cosmic-star-twinkle {
+  animation: cosmicTwinkle var(--star-dur, 2.2s) ease-in-out var(--star-delay, 0s) infinite;
+}
+
+@keyframes cosmicMeteor {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-32deg) scaleX(0.5); }
+  12% { opacity: 1; }
+  45% { opacity: 0; transform: translate3d(-240px, 150px, 0) rotate(-32deg) scaleX(1.2); }
+  100% { opacity: 0; transform: translate3d(-240px, 150px, 0) rotate(-32deg) scaleX(1.2); }
+}
+.cosmic-meteor {
+  animation: cosmicMeteor var(--met-dur, 3.6s) ease-out var(--met-delay, 0s) infinite;
+}
+
+@keyframes cosmicVortex {
+  from { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.06); }
+  to { transform: rotate(360deg) scale(1); }
+}
+.cosmic-vortex {
+  animation: cosmicVortex 11s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-hint-ring,
   .animate-pop-in,
@@ -486,7 +733,30 @@
   .anime-boss-enraged,
   .phonk-eq-bar,
   .animate-float-heart,
-  .animate-damage-float {
+  .animate-damage-float,
+  .anime-tentacle-a,
+  .anime-tentacle-b,
+  .anime-tentacle-c,
+  .anime-puffer-inflate,
+  .anime-claw-l,
+  .anime-claw-r,
+  .anime-gold-glint,
+  .anime-cannon-recoil,
+  .anime-muzzle-flash,
+  .anime-orca-glide,
+  .anime-cthulhu-wing-l,
+  .anime-cthulhu-wing-r,
+  .anime-bubble-rise,
+  .anime-fish-swim,
+  .anime-fish-swim-fast,
+  .anime-fish-tail,
+  .anime-fish-patrol,
+  .animate-boss-comic,
+  .animate-boss-tap,
+  .animate-boss-heal,
+  .cosmic-star-twinkle,
+  .cosmic-meteor,
+  .cosmic-vortex {
     animation: none;
   }
 }

@@ -608,6 +608,40 @@ export function checkSolved(
 }
 
 /**
+ * Computes minimum algebraic separation distance toward solving x = k.
+ * Used by Bab 3 Freeze-Penalty Boss to detect genuinely wrong/counterproductive moves.
+ */
+export function computeEquationComplexity(state: EquationState): number {
+  const scoreForXSide = (xSide: Side): number => {
+    const cSide: Side = xSide === 'left' ? 'right' : 'left';
+    const xSideTerms = state[xSide];
+    const cSideTerms = state[cSide];
+
+    const varsOnC = cSideTerms.filter((t) => t.kind === 'var').length;
+    const constsOnX = xSideTerms.filter((t) => t.kind === 'const').length;
+    const groupsAll = [...xSideTerms, ...cSideTerms].filter((t) => t.kind === 'group').length;
+
+    const allVars = [...xSideTerms, ...cSideTerms].filter(
+      (t): t is Extract<Term, { kind: 'var' }> => t.kind === 'var'
+    );
+    const allConsts = [...xSideTerms, ...cSideTerms].filter((t) => t.kind === 'const');
+
+    const extraVars = Math.max(0, allVars.length - 1);
+    const extraConsts = Math.max(0, allConsts.length - 1);
+
+    // Effective net coefficient of x if all x terms are gathered onto xSide
+    const netCoeff =
+      xSideTerms.reduce((acc, t) => acc + (t.kind === 'var' ? t.coeff : 0), 0) -
+      cSideTerms.reduce((acc, t) => acc + (t.kind === 'var' ? t.coeff : 0), 0);
+    const needsFlip = netCoeff < 0 ? 1 : 0;
+
+    return varsOnC + constsOnX + extraVars + extraConsts + groupsAll * 2 + needsFlip;
+  };
+
+  return Math.min(scoreForXSide('left'), scoreForXSide('right'));
+}
+
+/**
  * Context-aware pedagogical hint system (supports Bab 0 Pure Symbols + Bab 1-5 Algebra)
  */
 export function getSmartHint(state: EquationState, pureSymbolsMode = false): SmartHint {
