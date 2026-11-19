@@ -8,6 +8,7 @@ import {
   ChevronRight,
   FlipHorizontal2,
   Lightbulb,
+  Lock,
   RotateCcw,
   Settings,
   Sparkles,
@@ -53,9 +54,11 @@ import {
   TileCardFace,
 } from './AlgebraTile';
 import { BeachBackdrop } from './BeachBackdrop';
+import { BossCinematicMode, BossCinematicVideo } from './BossCinematicVideo';
 import {
   BossArenaBanner,
   BossDefeatModal,
+  KiboAfkDefeatModal,
   KiboAvatar,
   KiboBossCelebration,
   KiboMood,
@@ -191,6 +194,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [bossAwake, setBossAwake] = useState(() => !(isBossLevel && bossGimmick === 'freeze_penalty'));
   const [bossTimedOut, setBossTimedOut] = useState(false);
   const [bossDefeatReason, setBossDefeatReason] = useState<'timeout' | 'mistakes'>('timeout');
+  const [bossCinematic, setBossCinematic] = useState<BossCinematicMode | null>(() =>
+    isBossLevel ? 'encounter' : null
+  );
+  const [afkDefeat, setAfkDefeat] = useState(false);
   const [timeBonusFlash, setTimeBonusFlash] = useState(false);
   const [timePenaltyFlash, setTimePenaltyFlash] = useState(false);
   const [penaltyFlashText, setPenaltyFlashText] = useState('');
@@ -297,7 +304,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     ((bossGimmick === 'speed_enrage' && bossCurrentHp === 1) || cosmicMode);
   const timeSpeedMultiplier = cosmicMode ? 4 : isSpeedUp ? 2 : 1;
 
-  const phonkActive = isBossLevel && !solvedInfo && !bossTimedOut && bossCurrentHp > 0;
+  const phonkActive =
+    isBossLevel && !solvedInfo && !bossTimedOut && bossCurrentHp > 0 && bossCinematic !== 'victory';
   const bossIntensity: 'normal' | 'enraged' =
     bossCurrentHp === 1 || bossHasHealed || cosmicMode ? 'enraged' : 'normal';
 
@@ -321,6 +329,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, []);
 
   // Boss fight countdown timer:
+  // - Paused while epic boss encounter/victory video is playing!
   // - Bab 3 (freeze_penalty): frozen while asleep; starts ticking at 1x once player wakes Kura Meriam!
   // - Bab 1 at 1 HP: 2x faster tick (500ms)!
   // - Bab 5 at <=5 HP (Cosmic Rush): 4x faster tick (250ms)!
@@ -329,6 +338,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     if (
       !isBossLevel ||
       !level.boss ||
+      bossCinematic !== null ||
       isTimeFrozen ||
       solvedInfo ||
       bossTimedOut ||
@@ -360,6 +370,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, [
     isBossLevel,
     level.boss,
+    bossCinematic,
     isTimeFrozen,
     timeSpeedMultiplier,
     solvedInfo,
@@ -368,6 +379,52 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     bossHealAnim,
     bossCurrentHp,
   ]);
+
+  // Non-boss stage 1-minute AFK defeat: Kibo faints & player loses the stage (except Boss stages!)
+  useEffect(() => {
+    if (isBossLevel || solvedInfo || afkDefeat) return;
+
+    let timerId: number | null = null;
+    let lastStamp = Date.now();
+
+    const triggerAfkLoss = () => {
+      sound.playKiboCry();
+      setSelected(null);
+      setActiveDrag(null);
+      pendingRef.current = null;
+      setAfkDefeat(true);
+      setFeedback({
+        text: 'Uuu... Kibo pingsan karena kamu diam lebih dari 1 menit! Stage gagal!',
+        tone: 'warn',
+      });
+    };
+
+    const armTimer = () => {
+      if (timerId) window.clearTimeout(timerId);
+      timerId = window.setTimeout(triggerAfkLoss, 60_000);
+    };
+
+    const onActivity = () => {
+      const now = Date.now();
+      if (now - lastStamp < 800) return;
+      lastStamp = now;
+      armTimer();
+    };
+
+    armTimer();
+    window.addEventListener('pointerdown', onActivity, { passive: true });
+    window.addEventListener('pointermove', onActivity, { passive: true });
+    window.addEventListener('keydown', onActivity);
+    window.addEventListener('touchstart', onActivity, { passive: true });
+
+    return () => {
+      if (timerId) window.clearTimeout(timerId);
+      window.removeEventListener('pointerdown', onActivity);
+      window.removeEventListener('pointermove', onActivity);
+      window.removeEventListener('keydown', onActivity);
+      window.removeEventListener('touchstart', onActivity);
+    };
+  }, [isBossLevel, solvedInfo, afkDefeat, level]);
 
   useEffect(() => {
     clearFlyTimers();
@@ -384,6 +441,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setBossAwake(!(isBossLevel && level.boss?.gimmick === 'freeze_penalty'));
     setBossTimedOut(false);
     setBossDefeatReason('timeout');
+    setBossCinematic(isBossLevel ? 'encounter' : null);
+    setAfkDefeat(false);
     setTimeBonusFlash(false);
     setTimePenaltyFlash(false);
     setPenaltyFlashText('');
@@ -794,7 +853,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 {
                   equationText: formatEquation(nextFresh, pureSymbolsMode),
                   ruleLabel: nextPhase.label,
-                  explanation: 'Selesaikan persamaan fase ini — tekan Bantuan jika butuh petunjuk.',
+                  explanation: 'Selesaikan persamaan fase ini tanpa bantuan — buktikan kemampuanmu!',
                   stateSnapshot: cloneState(nextFresh),
                 },
               ]);
@@ -817,6 +876,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             setBossHitAnim(false);
             setBossStrikeAnim(false);
             setSolvedInfo({ displayResult: check.displayResult as string, stars });
+            setBossCinematic('victory');
             onComplete(level, newTotalMoves, stars, {
               flawless: !hadMistakeRef.current,
               usedHint: usedHintRef.current,
@@ -864,7 +924,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handlePointerStart = useCallback(
     (e: React.PointerEvent, term: Term, side: Side, dragKind: DragKind) => {
-      if (solvedInfo || bossHitAnim || bossHealAnim || bossTimedOut) return;
+      if (solvedInfo || bossHitAnim || bossHealAnim || bossTimedOut || bossCinematic !== null || afkDefeat) {
+        return;
+      }
       if (e.button !== 0 && e.pointerType === 'mouse') return;
 
       // Ensure Web Audio unlocks cleanly on mobile touch gesture
@@ -884,7 +946,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         dragKind,
       };
     },
-    [solvedInfo, bossHitAnim, bossHealAnim, bossTimedOut, phonkActive, bossIntensity]
+    [
+      solvedInfo,
+      bossHitAnim,
+      bossHealAnim,
+      bossTimedOut,
+      bossCinematic,
+      afkDefeat,
+      phonkActive,
+      bossIntensity,
+    ]
   );
 
   useEffect(() => {
@@ -1037,7 +1108,16 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handleTileTap = useCallback(
     (term: Term, side: Side) => {
-      if (suppressClickRef.current || solvedInfo || bossHitAnim || bossTimedOut) return;
+      if (
+        suppressClickRef.current ||
+        solvedInfo ||
+        bossHitAnim ||
+        bossTimedOut ||
+        bossCinematic !== null ||
+        afkDefeat
+      ) {
+        return;
+      }
 
       if (selected) {
         if (selected.termId === term.id) {
@@ -1057,11 +1137,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       sound.playPickup();
       setSelected({ termId: term.id, side });
     },
-    [selected, eqState, commitMove, solvedInfo, bossHitAnim, bossTimedOut]
+    [selected, eqState, commitMove, solvedInfo, bossHitAnim, bossTimedOut, bossCinematic, afkDefeat]
   );
 
   const handlePanClick = (panSide: Side) => {
-    if (!selected || solvedInfo || bossHitAnim || bossTimedOut) return;
+    if (!selected || solvedInfo || bossHitAnim || bossTimedOut || bossCinematic !== null || afkDefeat) {
+      return;
+    }
     if (selected.side !== panSide) {
       const term = eqState[selected.side].find((t) => t.id === selected.termId);
       if (term && term.kind !== 'group') {
@@ -1112,6 +1194,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setBossAwake(!(isBossLevel && level.boss?.gimmick === 'freeze_penalty'));
     setBossTimedOut(false);
     setBossDefeatReason('timeout');
+    setBossCinematic(null);
+    setAfkDefeat(false);
     setTimeBonusFlash(false);
     setTimePenaltyFlash(false);
     setPenaltyFlashText('');
@@ -1129,11 +1213,21 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     ]);
     setSelected(null);
     setActiveHint(null);
+    setKiboMood('idle');
     setSolvedInfo(null);
     setFeedback({ text: 'Papan dikembalikan ke posisi awal.', tone: 'info' });
   };
 
   const handleHint = () => {
+    if (isBossLevel) {
+      sound.playNudge();
+      flashKiboMood('oops', 1600);
+      setFeedback({
+        text: 'Bantuan tidak dapat dipakai saat melawan Bos! Ayo selesaikan dengan kemampuanmu sendiri!',
+        tone: 'warn',
+      });
+      return;
+    }
     usedHintRef.current = true;
     const hint = getSmartHint(eqState, pureSymbolsMode);
     sound.playPickup();
@@ -1518,22 +1612,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <KiboAvatar
                 size="sm"
                 chapterId={level.chapterId}
-                mood={kiboMood}
+                mood={afkDefeat ? 'fainted' : kiboMood}
                 interactive
+                afkTimeoutMs={0}
                 customQuips={isBossLevel ? level.boss?.kiboLines.tapLines : undefined}
-                onFaintChange={(fainted) => {
-                  if (fainted) {
-                    setFeedback({
-                      text: 'Uuu... Kibo sampai pingsan nungguin kamu lebih dari 1 menit! Sentuh layar biar Kibo bangun ya!',
-                      tone: 'warn',
-                    });
-                  } else {
-                    setFeedback({
-                      text: 'Hwaaah! Kibo sudah bangun lagi! Ayo lanjutkan pindah ruasnya!',
-                      tone: 'good',
-                    });
-                  }
-                }}
                 onInteract={(quip) => {
                   flashKiboMood('giggle', 1300);
                   setFeedback({ text: quip, tone: 'good' });
@@ -1937,10 +2019,22 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <button
               type="button"
               onClick={handleHint}
-              className="game-btn-gold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 min-h-[54px] sm:min-h-[48px] px-2 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer"
+              disabled={isBossLevel}
+              title={
+                isBossLevel
+                  ? 'Bantuan tidak tersedia saat melawan Bos'
+                  : 'Minta petunjuk langkah berikutnya'
+              }
+              className={`${
+                isBossLevel ? 'game-btn-wood opacity-45 cursor-not-allowed' : 'game-btn-gold cursor-pointer'
+              } flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 min-h-[54px] sm:min-h-[48px] px-2 rounded-xl text-xs sm:text-sm font-extrabold`}
             >
-              <Lightbulb className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Bantuan</span>
+              {isBossLevel ? (
+                <Lock className="w-4 h-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <Lightbulb className="w-4 h-4 shrink-0" aria-hidden="true" />
+              )}
+              <span>{isBossLevel ? 'Terkunci' : 'Bantuan'}</span>
             </button>
 
             <button
@@ -2213,8 +2307,18 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         </div>
       )}
 
-      {/* BOSS VICTORY CELEBRATION (KIBO HIGH-FIVE & CHEERING!) */}
-      {solvedInfo && isBossLevel && level.boss && (
+      {/* EPIC BOSS ENCOUNTER & VICTORY CINEMATIC VIDEO */}
+      {isBossLevel && level.boss && bossCinematic && (
+        <BossCinematicVideo
+          mode={bossCinematic}
+          boss={level.boss}
+          chapterId={level.chapterId}
+          onFinish={() => setBossCinematic(null)}
+        />
+      )}
+
+      {/* BOSS VICTORY CELEBRATION (KIBO HIGH-FIVE & CHEERING AFTER EPIC VIDEO!) */}
+      {solvedInfo && isBossLevel && level.boss && bossCinematic !== 'victory' && (
         <KiboBossCelebration
           boss={level.boss}
           chapterId={level.chapterId}
@@ -2240,6 +2344,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           onRetry={handleReset}
           onExit={onExit}
         />
+      )}
+
+      {/* NON-BOSS AFK > 1 MIN FAINT DEFEAT MODAL */}
+      {afkDefeat && !solvedInfo && !isBossLevel && (
+        <KiboAfkDefeatModal onRetry={handleReset} onExit={onExit} />
       )}
 
       {/* REGULAR STAGE VICTORY MODAL */}

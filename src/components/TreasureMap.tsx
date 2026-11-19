@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Compass, Crown, Star } from 'lucide-react';
+import { ArrowRight, Compass, Crown, Lock, Star } from 'lucide-react';
 import { formatEquation } from '../game/algebraEngine';
+import { ALL_LEVELS } from '../game/levels';
 import { sound } from '../game/sound';
 import { ChapterDef, LevelDef, ProgressStore } from '../game/types';
 import { AnimatedBoss } from './AnimatedBoss';
@@ -145,14 +146,38 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
   onSelectLevel,
 }) => {
   const [kiboMapQuip, setKiboMapQuip] = useState<string | null>(null);
+  const [lockedSuggestion, setLockedSuggestion] = useState<{
+    clicked: LevelDef;
+    required: LevelDef;
+  } | null>(null);
 
-  // Determine the next uncompleted stage in the current chapter so Kibo stands right there!
+  // Sequential unlock across all 120 stages:
+  // Stage 0 (Bab 0 Stage 1) is always unlocked; stage i unlocks once stage i-1 is completed.
+  const unlockedLevelIds = useMemo(() => {
+    const unlocked = new Set<string>();
+    for (let i = 0; i < ALL_LEVELS.length; i++) {
+      const lvl = ALL_LEVELS[i];
+      if (i === 0 || progress.completed[ALL_LEVELS[i - 1].id] || progress.completed[lvl.id]) {
+        unlocked.add(lvl.id);
+      }
+    }
+    return unlocked;
+  }, [progress.completed]);
+
+  const globalNextLevel = useMemo(
+    () => ALL_LEVELS.find((l) => !progress.completed[l.id]) ?? ALL_LEVELS[0],
+    [progress.completed]
+  );
+
+  // Determine the next uncompleted stage in the current chapter so Kibo stands right there if unlocked!
   const nextStageIndex = useMemo(() => {
     const idx = activeChapter.levels.findIndex((l) => !progress.completed[l.id]);
     return idx === -1 ? activeChapter.levels.length - 1 : idx;
   }, [activeChapter, progress.completed]);
 
   const nextLevel = activeChapter.levels[nextStageIndex];
+  const isChapterNextUnlocked = nextLevel ? unlockedLevelIds.has(nextLevel.id) : false;
+  const headerActionLevel = isChapterNextUnlocked && nextLevel ? nextLevel : globalNextLevel;
 
   // Build 5 visual rows of 4 stages, reversing rows 2 and 4 so CSS grid matches the S-curve trail!
   const visualRows = useMemo(() => {
@@ -179,6 +204,7 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
           const isActive = ch.id === activeChapter.id;
           const done = ch.levels.filter((l) => progress.completed[l.id]).length;
           const bossWon = ch.levels.some((l) => l.isBoss && progress.completed[l.id]);
+          const chUnlocked = ch.levels.length > 0 && unlockedLevelIds.has(ch.levels[0].id);
           return (
             <button
               key={ch.id}
@@ -186,17 +212,22 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
               onClick={() => {
                 sound.playPickup();
                 setKiboMapQuip(null);
+                setLockedSuggestion(null);
                 onSelectChapter(ch.id);
               }}
               className={`min-h-[58px] px-3.5 rounded-2xl flex items-center gap-2.5 shrink-0 transition-all cursor-pointer ${
                 isActive ? 'game-btn-gold' : 'game-btn-wood'
-              }`}
+              } ${!chUnlocked ? 'opacity-80' : ''}`}
             >
               <SwimmingFishIcon chapterId={ch.id} active={isActive} />
               <div className="flex flex-col items-start justify-center">
                 <div className="flex items-center gap-1 font-display font-extrabold text-sm whitespace-nowrap">
                   <span>Bab {ch.id}</span>
-                  {bossWon && <Crown className="w-3.5 h-3.5 text-[#B45309]" aria-hidden="true" />}
+                  {bossWon ? (
+                    <Crown className="w-3.5 h-3.5 text-[#B45309]" aria-hidden="true" />
+                  ) : !chUnlocked ? (
+                    <Lock className="w-3 h-3 text-[#64748B]" aria-label="Terkunci" />
+                  ) : null}
                 </div>
                 <span
                   className={`text-[11px] font-mono font-bold tabular-nums ${
@@ -264,9 +295,12 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
           <div className="flex items-center gap-3.5">
             <AnimatedKibo
               size="md"
-              mood={kiboMapQuip ? 'excited' : 'happy'}
+              mood={lockedSuggestion ? 'thinking' : kiboMapQuip ? 'excited' : 'happy'}
               interactive
-              onInteract={(quip) => setKiboMapQuip(quip)}
+              onInteract={(quip) => {
+                setLockedSuggestion(null);
+                setKiboMapQuip(quip);
+              }}
               className="border-2 border-[#B47B38] shadow-md shrink-0"
             />
             <div className="min-w-0">
@@ -278,13 +312,25 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                 {activeChapter.title}
               </h1>
               <p className="mt-0.5 text-xs sm:text-sm text-[#78350F] font-medium">
-                {kiboMapQuip
-                  ? `Kibo: “${kiboMapQuip}”`
-                  : nextLevel
-                    ? `Kibo: “Ikuti garis merah putus-putus menuju ${
-                        nextLevel.isBoss ? nextLevel.boss?.name : `Stage ${nextLevel.levelNumber}`
-                      }!”`
-                    : activeChapter.subtitle}
+                {lockedSuggestion
+                  ? `Kibo: “Eits, ${
+                      lockedSuggestion.clicked.isBoss
+                        ? lockedSuggestion.clicked.boss?.name ?? 'Stage Bos'
+                        : `Stage ${lockedSuggestion.clicked.levelNumber}`
+                    } masih terkunci! Yuk selesaikan dulu Bab ${lockedSuggestion.required.chapterId} · ${
+                      lockedSuggestion.required.isBoss
+                        ? lockedSuggestion.required.boss?.name ?? 'Bos'
+                        : `Stage ${lockedSuggestion.required.levelNumber}`
+                    }!”`
+                  : kiboMapQuip
+                    ? `Kibo: “${kiboMapQuip}”`
+                    : headerActionLevel
+                      ? `Kibo: “Ikuti garis merah putus-putus menuju ${
+                          headerActionLevel.isBoss
+                            ? headerActionLevel.boss?.name
+                            : `Bab ${headerActionLevel.chapterId} Stage ${headerActionLevel.levelNumber}`
+                        }!”`
+                      : activeChapter.subtitle}
               </p>
             </div>
           </div>
@@ -292,20 +338,62 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
           <button
             type="button"
             onClick={() => {
-              if (nextLevel) {
+              if (headerActionLevel) {
                 sound.playPickup();
-                onSelectLevel(nextLevel);
+                onSelectChapter(headerActionLevel.chapterId);
+                onSelectLevel(headerActionLevel);
               }
             }}
             className="game-btn-gold self-start sm:self-center inline-flex items-center gap-1.5 min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
           >
             <span>
-              {nextLevel?.isBoss
-                ? `Lawan ${nextLevel.boss?.name}`
-                : `Lanjut Stage ${nextLevel?.levelNumber ?? 1}`}
+              {headerActionLevel?.isBoss
+                ? `Lawan ${headerActionLevel.boss?.name}`
+                : isChapterNextUnlocked
+                  ? `Lanjut Stage ${headerActionLevel?.levelNumber ?? 1}`
+                  : `Selesaikan Bab ${headerActionLevel.chapterId} Stage ${headerActionLevel.levelNumber}`}
             </span>
           </button>
         </div>
+
+        {/* KIBO LOCKED STAGE SUGGESTION BANNER */}
+        {lockedSuggestion && (
+          <div className="relative z-10 mt-4 rounded-2xl bg-[#FFFBEB] border-2 border-[#F59E0B] p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md animate-pop-in">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/50 flex items-center justify-center shrink-0 text-[#B45309]">
+                <Lock className="w-5 h-5" aria-hidden="true" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-[#B45309]">
+                  Saran Kibo · Stage Masih Terkunci
+                </div>
+                <p className="text-xs sm:text-sm font-bold text-[#451A03] leading-snug">
+                  Selesaikan dulu{' '}
+                  <span className="text-[#C2410C]">
+                    Bab {lockedSuggestion.required.chapterId} ·{' '}
+                    {lockedSuggestion.required.isBoss
+                      ? lockedSuggestion.required.boss?.name ?? 'Bos'
+                      : `Stage ${lockedSuggestion.required.levelNumber} (${lockedSuggestion.required.title})`}
+                  </span>{' '}
+                  untuk membuka jalan berikutnya!
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                sound.playPickup();
+                onSelectChapter(lockedSuggestion.required.chapterId);
+                onSelectLevel(lockedSuggestion.required);
+              }}
+              className="game-btn-gold inline-flex items-center justify-center gap-1.5 min-h-[42px] px-4 rounded-xl text-xs sm:text-sm font-extrabold whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>Selesaikan Ini Dulu</span>
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
 
         {/* WINDING 20-STAGE TREASURE TRAIL WITH RED DASHED PATH & KIBO MARKER */}
         <div className="relative z-10 mt-5 sm:mt-6">
@@ -366,11 +454,12 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                   const stat = progress.completed[lvl.id];
                   const isBoss = !!lvl.isBoss;
                   const isStage1 = lvl.levelNumber === 1;
-                  const isKiboHere = idx === nextStageIndex;
+                  const isUnlocked = unlockedLevelIds.has(lvl.id);
+                  const isKiboHere = isUnlocked && idx === nextStageIndex;
 
                   return (
                     <div key={lvl.id} className="relative flex flex-col items-stretch">
-                      {/* KIBO STANDING RIGHT ON THE CURRENT STAGE OF THE TREASURE MAP! */}
+                      {/* KIBO STANDING RIGHT ON THE CURRENT UNLOCKED STAGE OF THE TREASURE MAP! */}
                       {isKiboHere && (
                         <div className="pointer-events-none absolute -top-6 right-1.5 z-20 flex items-center gap-1">
                           <span className="rounded-lg bg-[#DC2626] text-[#FEF9C3] font-display font-extrabold text-[10px] px-2 py-0.5 shadow-md whitespace-nowrap border border-[#FEF08A]">
@@ -385,21 +474,37 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                       <button
                         type="button"
                         onClick={() => {
+                          if (!isUnlocked) {
+                            sound.playNudge();
+                            setKiboMapQuip(null);
+                            setLockedSuggestion({ clicked: lvl, required: globalNextLevel });
+                            return;
+                          }
                           sound.playPickup();
+                          setLockedSuggestion(null);
                           onSelectLevel(lvl);
                         }}
+                        aria-label={
+                          isUnlocked
+                            ? isBoss
+                              ? `Lawan ${lvl.boss?.name ?? lvl.title}`
+                              : `Mainkan Stage ${lvl.levelNumber}: ${lvl.title}`
+                            : `Stage ${lvl.levelNumber} terkunci`
+                        }
                         className={`relative rounded-2xl p-2.5 sm:p-3 text-left flex flex-col justify-between gap-1.5 min-h-[112px] sm:min-h-[126px] transition-transform active:scale-[0.97] cursor-pointer ${
-                          isBoss
-                            ? 'bg-gradient-to-br from-[#451A03] via-[#7C2D12] to-[#991B1B] border-2 border-[#FBBF24] text-white shadow-xl ring-2 ring-[#DC2626]/40'
-                            : isKiboHere
-                              ? 'bg-[#FFFBEB] border-3 border-[#DC2626] text-[#451A03] shadow-lg'
-                              : stat
-                                ? 'bg-[#FFFDF4]/95 border-2 border-[#D97706] text-[#451A03] shadow-md'
-                                : 'bg-[#FEF7E0]/95 border-2 border-dashed border-[#B47B38] text-[#451A03] hover:border-solid hover:border-[#DC2626]'
+                          !isUnlocked
+                            ? 'bg-[#EADAC0]/75 border-2 border-dashed border-[#A68B66]/70 text-[#7C6547] opacity-80 hover:opacity-95'
+                            : isBoss
+                              ? 'bg-gradient-to-br from-[#451A03] via-[#7C2D12] to-[#991B1B] border-2 border-[#FBBF24] text-white shadow-xl ring-2 ring-[#DC2626]/40'
+                              : isKiboHere
+                                ? 'bg-[#FFFBEB] border-3 border-[#DC2626] text-[#451A03] shadow-lg'
+                                : stat
+                                  ? 'bg-[#FFFDF4]/95 border-2 border-[#D97706] text-[#451A03] shadow-md'
+                                  : 'bg-[#FEF7E0]/95 border-2 border-dashed border-[#B47B38] text-[#451A03] hover:border-solid hover:border-[#DC2626]'
                         }`}
                       >
-                        {/* Red X Seal on Stage 20 Boss */}
-                        {isBoss && (
+                        {/* Red X Seal on Unlocked Stage 20 Boss */}
+                        {isBoss && isUnlocked && (
                           <span
                             className="pointer-events-none absolute -top-2.5 -left-2 w-7 h-7 rounded-full bg-[#DC2626] border-2 border-[#FEF08A] text-[#FEF08A] font-display font-extrabold text-sm flex items-center justify-center shadow-md"
                             aria-hidden="true"
@@ -411,12 +516,21 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                         <div className="flex items-center justify-between gap-1">
                           <span
                             className={`font-display font-extrabold text-xs sm:text-sm flex items-center gap-1 ${
-                              isBoss ? 'text-[#FEF08A]' : 'text-[#7C2D12]'
+                              !isUnlocked
+                                ? 'text-[#786144]'
+                                : isBoss
+                                  ? 'text-[#FEF08A]'
+                                  : 'text-[#7C2D12]'
                             }`}
                           >
                             {isBoss ? (
                               <>
-                                <Crown className="w-3.5 h-3.5 text-[#FBBF24] shrink-0" aria-hidden="true" />
+                                <Crown
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    isUnlocked ? 'text-[#FBBF24]' : 'text-[#9A805F]'
+                                  }`}
+                                  aria-hidden="true"
+                                />
                                 <span>BOS 20</span>
                               </>
                             ) : (
@@ -424,54 +538,73 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                             )}
                           </span>
 
-                          <div className="flex items-center gap-0.5" aria-hidden="true">
-                            {[1, 2, 3].map((s) => (
-                              <Star
-                                key={s}
-                                className={`w-3.5 h-3.5 ${
-                                  stat && s <= stat.stars
-                                    ? 'text-[#F59E0B] fill-[#FBBF24]'
-                                    : isBoss
-                                      ? 'text-[#78350F]'
-                                      : 'text-[#D6B88D]'
-                                }`}
-                              />
-                            ))}
-                          </div>
+                          {!isUnlocked ? (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-extrabold text-[#7C6547]">
+                              <Lock className="w-3.5 h-3.5" aria-hidden="true" />
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-0.5" aria-hidden="true">
+                              {[1, 2, 3].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`w-3.5 h-3.5 ${
+                                    stat && s <= stat.stars
+                                      ? 'text-[#F59E0B] fill-[#FBBF24]'
+                                      : isBoss
+                                        ? 'text-[#78350F]'
+                                        : 'text-[#D6B88D]'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className={isBoss ? 'flex items-center gap-2' : ''}>
                           {isBoss && (
-                            <AnimatedBoss
-                              chapterId={activeChapter.id}
-                              state="idle"
-                              phonkPlaying={false}
-                              size="sm"
-                              interactive={false}
-                            />
+                            <div className={!isUnlocked ? 'grayscale opacity-65' : ''}>
+                              <AnimatedBoss
+                                chapterId={activeChapter.id}
+                                state="idle"
+                                phonkPlaying={false}
+                                size="sm"
+                                interactive={false}
+                              />
+                            </div>
                           )}
                           <div className="min-w-0">
                             <div
                               className={`font-display font-bold text-xs leading-snug line-clamp-2 ${
-                                isBoss ? 'text-white' : 'text-[#451A03]'
+                                !isUnlocked
+                                  ? 'text-[#6B563C]'
+                                  : isBoss
+                                    ? 'text-white'
+                                    : 'text-[#451A03]'
                               }`}
                             >
                               {isBoss ? lvl.boss?.name ?? lvl.title : lvl.title}
                             </div>
                             <div
                               className={`mt-1 font-mono text-[10px] font-bold truncate ${
-                                isBoss ? 'text-[#FDE68A]' : 'text-[#92400E]'
+                                !isUnlocked
+                                  ? 'text-[#8C7354]'
+                                  : isBoss
+                                    ? 'text-[#FDE68A]'
+                                    : 'text-[#92400E]'
                               }`}
                             >
-                              {isBoss
-                                ? lvl.boss?.gimmick === 'freeze_penalty'
-                                  ? `${lvl.boss.personality} · Tidur · 4× Salah`
-                                  : lvl.boss?.gimmick === 'cosmic_many_hp'
-                                    ? `${lvl.boss.personality} · 10 HP · Rush 4×`
-                                    : `${lvl.boss?.personality} · ${lvl.boss?.timeLimitSeconds ?? 120} dtk`
-                                : isStage1
-                                  ? 'Panduan Kibo'
-                                  : formatEquation(lvl.initial, lvl.defaultVisual === 'pure_symbols')}
+                              {!isUnlocked
+                                ? 'Terkunci'
+                                : isBoss
+                                  ? `${lvl.boss?.phases.length ?? 3} HP · ${Math.round(
+                                      (lvl.boss?.timeLimitSeconds ?? 120) / 60
+                                    )} Menit`
+                                  : isStage1
+                                    ? 'Panduan Kibo'
+                                    : formatEquation(
+                                        lvl.initial,
+                                        lvl.defaultVisual === 'pure_symbols'
+                                      )}
                             </div>
                           </div>
                         </div>

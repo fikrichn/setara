@@ -34,7 +34,7 @@ import { sound } from './game/sound';
 import { stageMusic } from './game/stageMusic';
 import { LevelDef, ProgressStore } from './game/types';
 
-type GameScreen = 'LOBBY' | 'MAP' | 'ARCADE' | 'CODEX';
+type GameScreen = 'LOBBY' | 'MAP' | 'ARCADE' | 'CODEX' | 'BADGES';
 
 const STORAGE_KEY = 'setara_progress_v1';
 
@@ -308,8 +308,18 @@ export default function App() {
     sound.playPickup();
     const ch = CHAPTERS.find((c) => c.id === chapterId);
     if (ch && ch.levels.length > 0) {
+      const firstLvl = ch.levels[0];
+      const globalIdx = ALL_LEVELS.findIndex((l) => l.id === firstLvl.id);
+      const isUnlocked =
+        globalIdx <= 0 ||
+        !!progress.completed[ALL_LEVELS[globalIdx - 1].id] ||
+        !!progress.completed[firstLvl.id];
       setSelectedChapterId(chapterId);
-      setActiveLevel(ch.levels[0]);
+      if (isUnlocked) {
+        setActiveLevel(firstLvl);
+      } else {
+        setScreen('MAP');
+      }
     }
   };
 
@@ -466,13 +476,14 @@ export default function App() {
           </button>
 
           {/* Desktop Game Mode Tabs */}
-          <nav aria-label="Menu permainan" className="hidden md:flex items-center gap-2">
+          <nav aria-label="Menu permainan" className="hidden md:flex items-center gap-1.5">
             {(
               [
                 ['LOBBY', 'Lobi'],
                 ['MAP', 'Peta Bab'],
                 ['ARCADE', 'Latihan Acak'],
                 ['CODEX', 'Buku Saku'],
+                ['BADGES', 'Badge'],
               ] as [GameScreen, string][]
             ).map(([id, label]) => (
               <button
@@ -482,7 +493,7 @@ export default function App() {
                   sound.playPickup();
                   setScreen(id);
                 }}
-                className={`min-h-[40px] px-4 rounded-xl text-sm font-extrabold transition-all whitespace-nowrap cursor-pointer ${
+                className={`min-h-[40px] px-3.5 rounded-xl text-sm font-extrabold transition-all whitespace-nowrap cursor-pointer ${
                   screen === id
                     ? 'bg-[#FEF08A] text-[#0D354C] shadow'
                     : 'text-[#E0F2FE] hover:text-white hover:bg-white/10'
@@ -599,8 +610,8 @@ export default function App() {
                   </div>
                 </button>
 
-                {/* 3 CHUNKY ANDROID MENU BUTTONS */}
-                <div className="grid grid-cols-3 gap-2.5">
+                {/* 4 CHUNKY ANDROID MENU BUTTONS */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -610,7 +621,7 @@ export default function App() {
                     className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Compass className="w-6 h-6 text-[#0284C7]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold">Peta Bab</span>
+                    <span className="text-xs font-extrabold whitespace-nowrap">Peta Bab</span>
                   </button>
 
                   <button
@@ -622,7 +633,7 @@ export default function App() {
                     className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <Shuffle className="w-6 h-6 text-[#D97706]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold">Latihan</span>
+                    <span className="text-xs font-extrabold whitespace-nowrap">Latihan</span>
                   </button>
 
                   <button
@@ -634,7 +645,19 @@ export default function App() {
                     className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <BookOpen className="w-6 h-6 text-[#0D9488]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold">Buku Saku</span>
+                    <span className="text-xs font-extrabold whitespace-nowrap">Buku Saku</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playPickup();
+                      setScreen('BADGES');
+                    }}
+                    className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Award className="w-6 h-6 text-[#B45309]" aria-hidden="true" />
+                    <span className="text-xs font-extrabold whitespace-nowrap">Badge</span>
                   </button>
                 </div>
 
@@ -701,11 +724,6 @@ export default function App() {
                 </div>
               </div>
             </section>
-
-            {/* Full-Width Lobby Player Profile & Achievement Badges Showcase */}
-            <div className="lg:col-span-12">
-              <ProfileBadgesCard progress={progress} />
-            </div>
           </div>
         )}
 
@@ -799,6 +817,30 @@ export default function App() {
 
         {/* SCREEN 4: KIBO RULEBOOK / CODEX */}
         {screen === 'CODEX' && <PocketGuide onStartChapter={handleStartChapter} />}
+
+        {/* SCREEN 5: DEDICATED ACHIEVEMENT BADGES MENU */}
+        {screen === 'BADGES' && (
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5">
+            <div className="rounded-3xl game-panel p-4 sm:p-5 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3.5">
+                <KiboAvatar size="md" chapterId={selectedChapterId} mood="excited" animate />
+                <div>
+                  <p className="text-xs font-extrabold text-[#B45309]">
+                    Koleksi Prestasi Petualangan
+                  </p>
+                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
+                    Badge Pencapaian
+                  </h1>
+                  <p className="text-xs sm:text-sm text-[#35637A]">
+                    Kumpulkan semua lencana spesial dari setiap tantangan dan kemenanganmu bersama Kibo!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <ProfileBadgesCard progress={progress} />
+          </div>
+        )}
       </main>
 
       {/* MOBILE NATIVE ANDROID BOTTOM NAVIGATION BAR */}
@@ -806,13 +848,14 @@ export default function App() {
         aria-label="Navigasi game"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0D4A6B]/95 backdrop-blur-md border-t-2 border-[#7DD3FC]/55 pb-safe"
       >
-        <div className="grid grid-cols-4 h-15">
+        <div className="grid grid-cols-5 h-15">
           {(
             [
               { id: 'LOBBY' as GameScreen, label: 'Lobi', Icon: Home },
-              { id: 'MAP' as GameScreen, label: 'Peta Bab', Icon: Compass },
+              { id: 'MAP' as GameScreen, label: 'Peta', Icon: Compass },
               { id: 'ARCADE' as GameScreen, label: 'Latihan', Icon: Shuffle },
               { id: 'CODEX' as GameScreen, label: 'Buku Saku', Icon: BookOpen },
+              { id: 'BADGES' as GameScreen, label: 'Badge', Icon: Award },
             ]
           ).map(({ id, label, Icon }) => {
             const active = screen === id;
@@ -829,7 +872,7 @@ export default function App() {
                 }`}
               >
                 <Icon className={`w-5 h-5 ${active ? 'stroke-[2.5]' : 'stroke-[1.9]'}`} aria-hidden="true" />
-                <span className="text-[11px] font-extrabold tracking-tight">{label}</span>
+                <span className="text-[10px] font-extrabold tracking-tight whitespace-nowrap">{label}</span>
               </button>
             );
           })}
