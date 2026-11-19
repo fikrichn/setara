@@ -465,10 +465,10 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                             >
                               {isBoss
                                 ? lvl.boss?.gimmick === 'freeze_penalty'
-                                  ? `${lvl.boss.personality} · Waktu Beku`
+                                  ? `${lvl.boss.personality} · Tidur · 4× Salah`
                                   : lvl.boss?.gimmick === 'cosmic_many_hp'
-                                    ? `${lvl.boss.personality} · 6 HP Kosmik`
-                                    : `${lvl.boss?.personality} · ${lvl.boss?.timeLimitSeconds ?? 90} dtk`
+                                    ? `${lvl.boss.personality} · 10 HP · Rush 4×`
+                                    : `${lvl.boss?.personality} · ${lvl.boss?.timeLimitSeconds ?? 120} dtk`
                                 : isStage1
                                   ? 'Panduan Kibo'
                                   : formatEquation(lvl.initial, lvl.defaultVisual === 'pure_symbols')}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ChevronRight,
@@ -19,38 +19,265 @@ import {
   BossAnimState,
   getBossVariantForChapter,
 } from './AnimatedBoss';
-import { AnimatedKibo, KiboMood } from './AnimatedKibo';
+import { AnimatedKibo, KiboMood, KiboReaction } from './AnimatedKibo';
 
-export type { KiboMood };
+export type { KiboMood, KiboReaction };
+
+type ActiveKiboReaction = Exclude<KiboReaction, 'none' | 'fainted'>;
+
+const CHAPTER_REACTION_POOLS: Record<number, ActiveKiboReaction[]> = {
+  0: ['bubble_blow', 'happy_dance', 'treasure_sparkle', 'thinking_pose', 'cheer_jump'],
+  1: ['pirate_salute', 'surfer_wave', 'happy_dance', 'thinking_pose', 'cheer_jump'],
+  2: ['treasure_sparkle', 'thinking_pose', 'happy_dance', 'cheer_jump', 'bubble_blow'],
+  3: ['thinking_pose', 'bubble_blow', 'surfer_wave', 'happy_dance', 'cheer_jump'],
+  4: ['surfer_wave', 'pirate_salute', 'thinking_pose', 'cheer_jump', 'happy_dance'],
+  5: ['cosmic_float', 'thinking_pose', 'cheer_jump', 'happy_dance', 'treasure_sparkle'],
+};
+
+const DEFAULT_REACTION_POOL: ActiveKiboReaction[] = [
+  'happy_dance',
+  'thinking_pose',
+  'cheer_jump',
+  'bubble_blow',
+  'surfer_wave',
+  'treasure_sparkle',
+];
+
+const CHAPTER_QUIPS: Record<number, string[]> = {
+  0: [
+    'Blub-blub! Di Bab 0 kita main simbol pantai tanpa angka, seru kan!',
+    'Ayo buat Peti Pusaka sendirian di satu ruas timbangan!',
+    'Pasangan simbol asli dan lawan kalau digabung langsung lenyap!',
+  ],
+  1: [
+    'Siap kapten! Di Bab 1 ingat ya: + pindah ruas jadi −, − jadi +!',
+    'Wiuuu! Ombak Bab 1 makin asyik buat pindah ruas angka!',
+    'Kalau angka berlawanan bertemu di ruas yang sama, langsung jadi 0!',
+  ],
+  2: [
+    'Kilau emas Bab 2! Gabungkan angka sejenis biar papan makin rapi!',
+    'Hmm... angka negatif dan positif kalau pas bakal saling hapus!',
+    'Hiu-hiu! Harta karun aljabar Bab 2 menunggumu!',
+  ],
+  3: [
+    'Awas Bab 3! Pengali di depan x kalau pindah ruas berubah jadi bagi!',
+    'Pecahan pembagi / kalau menyeberangi = langsung berubah jadi kali!',
+    'Tenang dan teliti ya, Kibo selalu joget menyemangatimu!',
+  ],
+  4: [
+    'Keren! Di Bab 4 kumpulkan semua x di satu ruas dan angka di ruas lain!',
+    'Lawan ombak Bab 4 dengan tenang — satu kartu tiap langkah!',
+    'Siap hormat kapten! Variabel di dua sisi pasti bisa kamu rapikan!',
+  ],
+  5: [
+    'Wuuush! Melayang di dimensi kosmik Bab 5! Buka kurung atau pindah faktor dulu!',
+    'Bab terakhir penuh tantangan seru — Kibo percaya kamu bisa!',
+    'Tanda kurung di Bab 5 bukan penghalang buat jagoan pindah ruas!',
+  ],
+};
+
+const DEFAULT_AFK_MS = 60_000;
+
+function pickRandomReaction(
+  pool: ActiveKiboReaction[],
+  prev: KiboReaction
+): ActiveKiboReaction {
+  const candidates = pool.filter((r) => r !== prev);
+  const source = candidates.length > 0 ? candidates : pool;
+  return source[Math.floor(Math.random() * source.length)];
+}
 
 export const KiboAvatar: React.FC<{
   size?: 'sm' | 'md' | 'lg' | 'xl';
   animate?: boolean;
   mood?: KiboMood;
+  chapterId?: number;
   crown?: boolean;
   highFiveRaised?: boolean;
   interactive?: boolean;
+  enableIdleReactions?: boolean;
+  afkTimeoutMs?: number;
   customQuips?: string[];
   onInteract?: (quip: string) => void;
+  onFaintChange?: (fainted: boolean) => void;
 }> = ({
   size = 'md',
   animate = true,
   mood,
+  chapterId,
   crown = false,
   highFiveRaised = false,
   interactive = true,
+  enableIdleReactions = true,
+  afkTimeoutMs = DEFAULT_AFK_MS,
   customQuips,
   onInteract,
+  onFaintChange,
 }) => {
-  const resolvedMood: KiboMood = mood ?? (animate ? 'happy' : 'idle');
+  const [reaction, setReaction] = useState<KiboReaction>('none');
+  const [isFainted, setIsFainted] = useState(false);
+
+  const lastReactionRef = useRef<KiboReaction>('none');
+  const reactionClearTimerRef = useRef<number | null>(null);
+  const nextAutoTimerRef = useRef<number | null>(null);
+  const afkTimerRef = useRef<number | null>(null);
+  const lastActivityStampRef = useRef<number>(Date.now());
+  const isFaintedRef = useRef(false);
+  const onFaintChangeRef = useRef(onFaintChange);
+
+  useEffect(() => {
+    onFaintChangeRef.current = onFaintChange;
+  }, [onFaintChange]);
+
+  const reactionPool =
+    typeof chapterId === 'number' && CHAPTER_REACTION_POOLS[chapterId]
+      ? CHAPTER_REACTION_POOLS[chapterId]
+      : DEFAULT_REACTION_POOL;
+
+  const resolvedCustomQuips =
+    customQuips && customQuips.length > 0
+      ? customQuips
+      : typeof chapterId === 'number' && CHAPTER_QUIPS[chapterId]
+        ? CHAPTER_QUIPS[chapterId]
+        : undefined;
+
+  const triggerRandomReaction = useCallback(
+    (durationMs = 2600) => {
+      const picked = pickRandomReaction(reactionPool, lastReactionRef.current);
+      lastReactionRef.current = picked;
+      setReaction(picked);
+      if (reactionClearTimerRef.current) window.clearTimeout(reactionClearTimerRef.current);
+      reactionClearTimerRef.current = window.setTimeout(() => {
+        setReaction((curr) => (curr === picked ? 'none' : curr));
+      }, durationMs);
+    },
+    [reactionPool]
+  );
+
+  // Trigger a fresh chapter-themed reaction when entering a new chapter
+  useEffect(() => {
+    if (!enableIdleReactions || mood === 'crying' || typeof chapterId !== 'number') return;
+    if (isFaintedRef.current) return;
+    triggerRandomReaction(2400);
+  }, [chapterId, enableIdleReactions, mood, triggerRandomReaction]);
+
+  // Spontaneous randomized animated reactions based on current chapter
+  useEffect(() => {
+    if (!enableIdleReactions || !animate || mood === 'crying' || isFainted) {
+      if (nextAutoTimerRef.current) window.clearTimeout(nextAutoTimerRef.current);
+      return;
+    }
+
+    let cancelled = false;
+    const scheduleNext = () => {
+      const delay = 6500 + Math.floor(Math.random() * 4500);
+      nextAutoTimerRef.current = window.setTimeout(() => {
+        if (cancelled || isFaintedRef.current) return;
+        triggerRandomReaction(2700);
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => {
+      cancelled = true;
+      if (nextAutoTimerRef.current) window.clearTimeout(nextAutoTimerRef.current);
+    };
+  }, [enableIdleReactions, animate, mood, isFainted, triggerRandomReaction]);
+
+  // 1-minute AFK inactivity detector -> Kibo faints if player is AFK > 1 minute!
+  useEffect(() => {
+    if (!enableIdleReactions || mood === 'crying' || afkTimeoutMs <= 0) {
+      if (afkTimerRef.current) window.clearTimeout(afkTimerRef.current);
+      if (isFaintedRef.current) {
+        isFaintedRef.current = false;
+        setIsFainted(false);
+        onFaintChangeRef.current?.(false);
+      }
+      return;
+    }
+
+    const armAfkTimer = () => {
+      if (afkTimerRef.current) window.clearTimeout(afkTimerRef.current);
+      afkTimerRef.current = window.setTimeout(() => {
+        isFaintedRef.current = true;
+        setIsFainted(true);
+        setReaction('fainted');
+        onFaintChangeRef.current?.(true);
+      }, afkTimeoutMs);
+    };
+
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (isFaintedRef.current) {
+        isFaintedRef.current = false;
+        setIsFainted(false);
+        onFaintChangeRef.current?.(false);
+        triggerRandomReaction(2000);
+        lastActivityStampRef.current = now;
+        armAfkTimer();
+        return;
+      }
+      // Throttle timer re-arming during rapid pointer movement
+      if (now - lastActivityStampRef.current < 800) return;
+      lastActivityStampRef.current = now;
+      armAfkTimer();
+    };
+
+    armAfkTimer();
+    window.addEventListener('pointerdown', handleUserActivity, { passive: true });
+    window.addEventListener('pointermove', handleUserActivity, { passive: true });
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('touchstart', handleUserActivity, { passive: true });
+
+    return () => {
+      if (afkTimerRef.current) window.clearTimeout(afkTimerRef.current);
+      window.removeEventListener('pointerdown', handleUserActivity);
+      window.removeEventListener('pointermove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+    };
+  }, [enableIdleReactions, mood, afkTimeoutMs, triggerRandomReaction]);
+
+  useEffect(() => {
+    return () => {
+      if (reactionClearTimerRef.current) window.clearTimeout(reactionClearTimerRef.current);
+      if (nextAutoTimerRef.current) window.clearTimeout(nextAutoTimerRef.current);
+      if (afkTimerRef.current) window.clearTimeout(afkTimerRef.current);
+    };
+  }, []);
+
+  const resolvedMood: KiboMood =
+    mood === 'crying' ? 'crying' : isFainted ? 'fainted' : mood ?? (animate ? 'happy' : 'idle');
+
+  const resolvedReaction: KiboReaction =
+    mood === 'crying'
+      ? 'none'
+      : isFainted
+        ? 'fainted'
+        : mood === 'thinking'
+          ? 'thinking_pose'
+          : mood === 'oops'
+            ? 'none'
+            : reaction;
+
   return (
     <AnimatedKibo
       size={size}
       mood={resolvedMood}
+      reaction={resolvedReaction}
       crown={crown}
       highFiveRaised={highFiveRaised}
       interactive={interactive}
-      customQuips={customQuips}
+      customQuips={resolvedCustomQuips}
+      onPet={() => {
+        if (isFaintedRef.current) {
+          isFaintedRef.current = false;
+          setIsFainted(false);
+          onFaintChangeRef.current?.(false);
+        }
+        triggerRandomReaction(2600);
+      }}
       onInteract={onInteract}
     />
   );
@@ -59,6 +286,7 @@ export const KiboAvatar: React.FC<{
 interface KiboTutorialCardProps {
   steps: TutorialStep[];
   currentIndex: number;
+  chapterId?: number;
   onNext: () => void;
   onSkip: () => void;
 }
@@ -66,6 +294,7 @@ interface KiboTutorialCardProps {
 export const KiboTutorialCard: React.FC<KiboTutorialCardProps> = ({
   steps,
   currentIndex,
+  chapterId,
   onNext,
   onSkip,
 }) => {
@@ -83,6 +312,7 @@ export const KiboTutorialCard: React.FC<KiboTutorialCardProps> = ({
       <div className="flex items-start gap-3.5">
         <KiboAvatar
           size="md"
+          chapterId={chapterId}
           mood={isLast ? 'excited' : 'thinking'}
           interactive
           onInteract={(q) => setTapQuip(q)}
@@ -139,7 +369,9 @@ interface BossArenaBannerProps {
   isHit: boolean;
   isHealAnim?: boolean;
   isSpeedUp?: boolean;
+  timeSpeedMultiplier?: number;
   isTimeFrozen?: boolean;
+  isBossSleeping?: boolean;
   cosmicMode?: boolean;
   mistakesUsed?: number;
   maxMistakes?: number;
@@ -149,6 +381,7 @@ interface BossArenaBannerProps {
   totalTimeSeconds: number;
   timeBonusFlash?: boolean;
   timePenaltyFlash?: boolean;
+  penaltyFlashText?: string;
   onBossTaunt: () => void;
 }
 
@@ -229,7 +462,9 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
   isHit,
   isHealAnim = false,
   isSpeedUp = false,
+  timeSpeedMultiplier = 1,
   isTimeFrozen = false,
+  isBossSleeping = false,
   cosmicMode = false,
   mistakesUsed = 0,
   maxMistakes = 0,
@@ -239,6 +474,7 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
   totalTimeSeconds,
   timeBonusFlash = false,
   timePenaltyFlash = false,
+  penaltyFlashText,
   onBossTaunt,
 }) => {
   const totalPhases = boss.phases.length;
@@ -247,9 +483,15 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
   const variant = getBossVariantForChapter(chapterId);
   const theme = STAGE_BOSS_THEMES[chapterId] ?? STAGE_BOSS_THEMES[0];
   const bossState: BossAnimState =
-    currentHp <= 0 ? 'defeated' : isHit ? 'hit' : currentHp === 1 || isHealAnim ? 'enraged' : 'idle';
+    currentHp <= 0
+      ? 'defeated'
+      : isHit
+        ? 'hit'
+        : currentHp === 1 || isHealAnim || cosmicMode
+          ? 'enraged'
+          : 'idle';
   const timePct = Math.max(0, Math.min(100, (timeLeftSeconds / Math.max(1, totalTimeSeconds)) * 100));
-  const isTimeCritical = timeLeftSeconds <= 15 || (isTimeFrozen && maxMistakes > 0 && mistakesUsed >= maxMistakes - 1);
+  const isTimeCritical = timeLeftSeconds <= 15 || (maxMistakes > 0 && mistakesUsed >= maxMistakes - 1);
   const isTimeWarn = !isTimeCritical && (timeLeftSeconds <= 30 || isSpeedUp);
 
   return (
@@ -338,6 +580,7 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
           state={bossState}
           phonkPlaying={phonkActive}
           cosmicMode={cosmicMode}
+          isSleeping={isBossSleeping}
           size="lg"
           onTaunt={onBossTaunt}
         />
@@ -359,17 +602,17 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
               {boss.gimmickLabel}
             </span>
             {cosmicMode && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#A855F7]/75 border border-[#F0ABFC] text-[10px] font-extrabold text-white animate-pulse">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#A855F7]/80 border border-[#F0ABFC] text-[10px] font-extrabold text-white animate-pulse">
                 <Sparkles className="w-3 h-3 shrink-0" aria-hidden="true" />
-                <span>MODE KOSMIK!</span>
+                <span>COSMIC RUSH {timeSpeedMultiplier}×!</span>
               </span>
             )}
             <span className="text-[#E0F2FE] font-semibold truncate">{currentPhase?.label}</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Bab 3 Mistake Counter Badge */}
-            {isTimeFrozen && maxMistakes > 0 && (
+            {/* Bab 3 Mistake Counter Badge (stays active whether sleeping or awake!) */}
+            {maxMistakes > 0 && (
               <div
                 className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border font-mono text-[11px] font-extrabold tabular-nums ${
                   mistakesUsed >= maxMistakes - 1
@@ -406,11 +649,13 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
               )}
               <span>{formatCountdown(timeLeftSeconds)}</span>
               {isTimeFrozen && (
-                <span className="ml-0.5 text-[10px] font-extrabold text-[#BAE6FD]">BEKU</span>
+                <span className="ml-0.5 text-[10px] font-extrabold text-[#BAE6FD]">
+                  {isBossSleeping ? 'TIDUR · BEKU' : 'BEKU'}
+                </span>
               )}
               {isSpeedUp && (
                 <span className="ml-0.5 text-[10px] font-extrabold text-[#FEF08A]">
-                  {cosmicMode ? '2× KOSMIK' : '2× CEPAT'}
+                  {cosmicMode ? `${timeSpeedMultiplier}× COSMIC` : `${timeSpeedMultiplier}× CEPAT`}
                 </span>
               )}
               {timeBonusFlash && (
@@ -420,7 +665,7 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
               )}
               {timePenaltyFlash && (
                 <span className="pointer-events-none absolute -top-5 right-0 text-[11px] font-extrabold text-[#FCA5A5] drop-shadow animate-damage-float whitespace-nowrap">
-                  −{boss.penaltySeconds ?? 30} dtk!
+                  {penaltyFlashText || `−${boss.penaltySeconds ?? 30} dtk!`}
                 </span>
               )}
             </div>
@@ -454,11 +699,13 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
               className="flex items-center gap-1"
               aria-label={`Nyawa Bos ${currentHp} dari ${maxHp}`}
             >
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0.5 flex-wrap">
                 {Array.from({ length: maxHp }).map((_, i) => (
                   <Heart
                     key={i}
-                    className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-200 ${
+                    className={`${
+                      maxHp > 6 ? 'w-3 h-3 sm:w-3.5 sm:h-3.5' : 'w-3.5 h-3.5 sm:w-4 sm:h-4'
+                    } transition-transform duration-200 ${
                       i < currentHp
                         ? isHealAnim
                           ? 'text-[#34D399] fill-[#34D399] scale-115'

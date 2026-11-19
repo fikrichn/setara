@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Home, LogOut, Music, Play, Settings, Volume2, X } from 'lucide-react';
+import { Film, Home, LogOut, Music, Play, Settings, Volume2, X } from 'lucide-react';
 import { sound } from '../game/sound';
 import { AnimatedKibo } from './AnimatedKibo';
 
@@ -12,6 +12,7 @@ interface SettingsModalProps {
   onChangeMusicVolume: (val: number) => void;
   onChangeSfxVolume: (val: number) => void;
   onReturnToMenu: () => void;
+  onReplayIntro?: () => void;
   onRequestExit: () => void;
   onClose: () => void;
 }
@@ -24,6 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeMusicVolume,
   onChangeSfxVolume,
   onReturnToMenu,
+  onReplayIntro,
   onRequestExit,
   onClose,
 }) => {
@@ -147,6 +149,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Home className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>Kembali ke Menu Utama</span>
+            </button>
+          )}
+
+          {onReplayIntro && (
+            <button
+              type="button"
+              onClick={() => {
+                sound.playPickup();
+                onReplayIntro();
+              }}
+              className="game-btn-wood w-full min-h-[46px] px-4 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+            >
+              <Film className="w-4 h-4 shrink-0 text-[#0284C7]" aria-hidden="true" />
+              <span>Putar Intro Kibo</span>
             </button>
           )}
 

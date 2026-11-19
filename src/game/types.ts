@@ -142,10 +142,18 @@ export interface LevelProgress {
   bestMoves: number;
 }
 
+export interface PlayerStats {
+  flawlessStageIds: string[]; // Stage IDs completed with zero errors/mistakes/undo
+  retryCount: number; // Total stage retries / replays
+  totalTransposes: number; // Total pindah ruas across '='
+  noHintBossWins: number; // Bosses defeated without using Bantuan
+}
+
 export interface ProgressStore {
   completed: Record<string, LevelProgress>;
   practiceSolved: number;
   soundEnabled: boolean;
   musicVolume: number; // 0.15 .. 1.0 (cannot be disabled)
   sfxVolume: number; // 0 .. 1.0
+  stats: PlayerStats;
 }

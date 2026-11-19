@@ -2,7 +2,27 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { sound } from '../game/sound';
 
-export type KiboMood = 'idle' | 'happy' | 'excited' | 'thinking' | 'oops' | 'giggle' | 'crying';
+export type KiboMood =
+  | 'idle'
+  | 'happy'
+  | 'excited'
+  | 'thinking'
+  | 'oops'
+  | 'giggle'
+  | 'crying'
+  | 'fainted';
+
+export type KiboReaction =
+  | 'none'
+  | 'thinking_pose'
+  | 'happy_dance'
+  | 'cheer_jump'
+  | 'pirate_salute'
+  | 'treasure_sparkle'
+  | 'bubble_blow'
+  | 'surfer_wave'
+  | 'cosmic_float'
+  | 'fainted';
 
 const KIBO_QUIPS = [
   'Hihi, geli! Ayo geser batunya ke seberang =!',
@@ -15,23 +35,27 @@ const KIBO_QUIPS = [
 
 interface AnimatedKiboProps {
   mood?: KiboMood;
+  reaction?: KiboReaction;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   crown?: boolean;
   highFiveRaised?: boolean;
   interactive?: boolean;
   customQuips?: string[];
   onInteract?: (quip: string) => void;
+  onPet?: () => void;
   className?: string;
 }
 
 export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
   mood = 'idle',
+  reaction = 'none',
   size = 'md',
   crown = false,
   highFiveRaised = false,
   interactive = true,
   customQuips,
   onInteract,
+  onPet,
   className = '',
 }) => {
   const uid = useId().replace(/:/g, '');
@@ -50,11 +74,33 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
     };
   }, []);
 
-  const activeMood: KiboMood = isGiggling && mood !== 'crying' ? 'giggle' : mood;
-  const isCrying = activeMood === 'crying';
+  const isCrying = mood === 'crying';
+  const isFainted = !isCrying && (mood === 'fainted' || reaction === 'fainted');
+  const activeReaction: KiboReaction = isCrying ? 'none' : isFainted ? 'fainted' : reaction;
+  const activeMood: KiboMood = isCrying
+    ? 'crying'
+    : isFainted
+      ? 'fainted'
+      : isGiggling
+        ? 'giggle'
+        : activeReaction === 'thinking_pose'
+          ? 'thinking'
+          : activeReaction === 'cheer_jump' || activeReaction === 'treasure_sparkle'
+            ? 'excited'
+            : activeReaction === 'happy_dance' || activeReaction === 'surfer_wave'
+              ? 'happy'
+              : mood;
+
   const fastTail =
     !isCrying &&
-    (activeMood === 'happy' || activeMood === 'excited' || activeMood === 'giggle' || highFiveRaised);
+    !isFainted &&
+    (activeMood === 'happy' ||
+      activeMood === 'excited' ||
+      activeMood === 'giggle' ||
+      activeReaction === 'happy_dance' ||
+      activeReaction === 'cheer_jump' ||
+      activeReaction === 'surfer_wave' ||
+      highFiveRaised);
 
   const sizeClass =
     size === 'sm'
@@ -72,6 +118,7 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
     setIsGiggling(true);
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => setIsGiggling(false), 1100);
+    onPet?.();
 
     const pool = customQuips && customQuips.length > 0 ? customQuips : KIBO_QUIPS;
     const quip = pool[quipIdxRef.current % pool.length];
@@ -107,69 +154,109 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
         </linearGradient>
       </defs>
 
-      {/* Sunny Beach Lagoon Backdrop */}
+      {/* Sunny Beach / Cosmic Lagoon Backdrop */}
       <rect x="0" y="0" width="120" height="120" rx="24" fill={`url(#kiboBg-${uid})`} />
+      {activeReaction === 'cosmic_float' && (
+        <rect x="0" y="0" width="120" height="120" rx="24" fill="#3B0764" opacity="0.58" />
+      )}
       {/* Warm Sand Strip at bottom */}
-      <path d="M 0 96 Q 60 88, 120 96 L 120 120 L 0 120 Z" fill="#FDE6A8" opacity="0.92" />
-      {!isCrying ? (
-        <>
-          <circle cx="24" cy="24" r="5" fill="#FFFFFF" opacity="0.45" />
-          <circle cx="96" cy="24" r="7" fill="#FEF08A" opacity="0.65" />
-        </>
-      ) : (
+      <path d="M 0 96 Q 60 88, 120 96 L 120 120 L 0 120 Z" fill="#FDE6A8" opacity={activeReaction === 'cosmic_float' ? 0.35 : 0.92} />
+      {isCrying ? (
         /* Cute little sad raincloud above Kibo when crying */
         <g opacity="0.85">
           <ellipse cx="92" cy="19" rx="14" ry="7" fill="#94A3B8" />
           <ellipse cx="86" cy="16" rx="9" ry="6" fill="#CBD5E1" />
           <ellipse cx="97" cy="17" rx="8" ry="5.5" fill="#CBD5E1" />
         </g>
+      ) : isFainted ? (
+        /* Fainted Dizzy Orbiting Stars & Zzz above Kibo */
+        <g>
+          <g className="anime-kibo-dizzy" style={{ transformOrigin: '60px 21px' }}>
+            <ellipse cx="60" cy="21" rx="22" ry="6.5" fill="none" stroke="#FEF08A" strokeWidth="1.6" strokeDasharray="4 4" opacity="0.85" />
+            <path d="M 38 17 L 39.5 20.5 L 43 22 L 39.5 23.5 L 38 27 L 36.5 23.5 L 33 22 L 36.5 20.5 Z" fill="#FDE047" />
+            <path d="M 82 15 L 83.2 18 L 86.2 19.2 L 83.2 20.4 L 82 23.4 L 80.8 20.4 L 77.8 19.2 L 80.8 18 Z" fill="#FBBF24" />
+          </g>
+          <text x="90" y="31" fill="#FFFFFF" fontSize="12" fontWeight="900" fontFamily="sans-serif" className="anime-kibo-zzz">
+            Zzz
+          </text>
+        </g>
+      ) : activeReaction === 'cosmic_float' ? (
+        <g>
+          <circle cx="22" cy="22" r="2.8" fill="#F0ABFC" className="anime-gold-glint" />
+          <circle cx="96" cy="20" r="3.2" fill="#22D3EE" className="anime-gold-glint" />
+          <circle cx="98" cy="76" r="2.5" fill="#FEF08A" className="anime-gold-glint" />
+          <circle cx="20" cy="74" r="2.3" fill="#22D3EE" className="anime-gold-glint" />
+        </g>
+      ) : (
+        <>
+          <circle cx="24" cy="24" r="5" fill="#FFFFFF" opacity="0.45" />
+          <circle cx="96" cy="24" r="7" fill="#FEF08A" opacity="0.65" />
+        </>
       )}
 
       {/* Ground Shadow */}
-      <ellipse cx="58" cy="107" rx="30" ry="6" fill="#0C4A6E" opacity="0.28" />
+      <ellipse
+        cx={isFainted ? 62 : 58}
+        cy="107"
+        rx={isFainted ? 38 : activeReaction === 'cosmic_float' || activeReaction === 'cheer_jump' ? 22 : 30}
+        ry="6"
+        fill="#0C4A6E"
+        opacity={isFainted ? 0.34 : 0.28}
+      />
 
-      {/* Animated Wagging Tail Fin (droops gently when crying) */}
+      {/* Main Character Group (tips sideways onto sand when fainted!) */}
       <g
-        className={isCrying ? '' : fastTail ? 'anime-kibo-tail-fast' : 'anime-kibo-tail'}
         style={
-          isCrying
-            ? { transform: 'rotate(18deg)', transformBox: 'fill-box', transformOrigin: 'left center' }
+          isFainted
+            ? {
+                transform: 'translate(6px, 18px) rotate(-28deg)',
+                transformOrigin: '60px 82px',
+              }
             : undefined
         }
       >
-        <path
-          d="M 85 75 C 98 70, 108 58, 112 52 C 110 64, 106 72, 102 77 C 107 82, 111 89, 112 96 C 103 91, 95 85, 84 82 Z"
-          fill={`url(#kiboBody-${uid})`}
-          stroke="#0F2D3A"
-          strokeWidth="3.2"
-          strokeLinejoin="round"
-        />
-      </g>
+        {/* Animated Wagging Tail Fin (droops gently when crying or fainted) */}
+        <g
+          className={isCrying || isFainted ? '' : fastTail ? 'anime-kibo-tail-fast' : 'anime-kibo-tail'}
+          style={
+            isCrying || isFainted
+              ? { transform: 'rotate(20deg)', transformBox: 'fill-box', transformOrigin: 'left center' }
+              : undefined
+          }
+        >
+          <path
+            d="M 85 75 C 98 70, 108 58, 112 52 C 110 64, 106 72, 102 77 C 107 82, 111 89, 112 96 C 103 91, 95 85, 84 82 Z"
+            fill={`url(#kiboBody-${uid})`}
+            stroke="#0F2D3A"
+            strokeWidth="3.2"
+            strokeLinejoin="round"
+          />
+        </g>
 
-      {/* Stubby Gemoy Feet */}
-      <g className={isCrying ? '' : 'anime-foot-l'}>
-        <path
-          d="M 41 90 C 37 97, 36 105, 45 106 C 53 106, 54 98, 52 90 Z"
-          fill="#2692C4"
-          stroke="#0F2D3A"
-          strokeWidth="3.2"
-          strokeLinejoin="round"
-        />
-        <ellipse cx="45" cy="102.5" rx="4.5" ry="2.2" fill="#D7F3FA" opacity="0.85" />
-      </g>
-      <g className={isCrying ? '' : 'anime-foot-r'}>
-        <path
-          d="M 67 90 C 65 98, 66 106, 74 106 C 83 105, 82 97, 78 90 Z"
-          fill="#2692C4"
-          stroke="#0F2D3A"
-          strokeWidth="3.2"
-          strokeLinejoin="round"
-        />
-        <ellipse cx="74" cy="102.5" rx="4.5" ry="2.2" fill="#D7F3FA" opacity="0.85" />
-      </g>
+        {/* Stubby Gemoy Feet */}
+        <g className={isCrying || isFainted ? '' : 'anime-foot-l'}>
+          <path
+            d="M 41 90 C 37 97, 36 105, 45 106 C 53 106, 54 98, 52 90 Z"
+            fill="#2692C4"
+            stroke="#0F2D3A"
+            strokeWidth="3.2"
+            strokeLinejoin="round"
+          />
+          <ellipse cx="45" cy="102.5" rx="4.5" ry="2.2" fill="#D7F3FA" opacity="0.85" />
+        </g>
+        <g className={isCrying || isFainted ? '' : 'anime-foot-r'}>
+          <path
+            d="M 67 90 C 65 98, 66 106, 74 106 C 83 105, 82 97, 78 90 Z"
+            fill="#2692C4"
+            stroke="#0F2D3A"
+            strokeWidth="3.2"
+            strokeLinejoin="round"
+          />
+          <ellipse cx="74" cy="102.5" rx="4.5" ry="2.2" fill="#D7F3FA" opacity="0.85" />
+        </g>
 
-      {/* Breathing / Sobbing Chubby Main Body Group */}
-      <g className={isCrying ? 'anime-kibo-sob' : 'anime-kibo-breathe'}>
+        {/* Breathing / Sobbing Chubby Main Body Group */}
+        <g className={isCrying ? 'anime-kibo-sob' : isFainted ? '' : 'anime-kibo-breathe'}>
         {/* Top Dorsal Fin */}
         <path
           d="M 52 28 C 54 13, 68 11, 74 22 C 70 24, 67 28, 67 32 Z"
@@ -237,13 +324,26 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
           <path d="M 34 59 Q 32 62.5 34 66" fill="none" />
         </g>
 
-        {/* Left Pectoral Fin (lifts up to wipe tears when crying!) */}
+        {/* Left Pectoral Fin (adapts to crying, fainted, cheer_jump, happy_dance, pirate_salute!) */}
         <g
-          className={isCrying ? '' : 'anime-kibo-fin-l'}
+          className={
+            isCrying ||
+            isFainted ||
+            activeReaction === 'cheer_jump' ||
+            activeReaction === 'pirate_salute'
+              ? ''
+              : 'anime-kibo-fin-l'
+          }
           style={
             isCrying
               ? { transform: 'rotate(42deg) translateY(-4px)', transformBox: 'fill-box', transformOrigin: 'right top' }
-              : undefined
+              : isFainted
+                ? { transform: 'rotate(-26deg) translateY(6px)', transformBox: 'fill-box', transformOrigin: 'right top' }
+                : activeReaction === 'cheer_jump'
+                  ? { transform: 'rotate(54deg) translateY(-6px)', transformBox: 'fill-box', transformOrigin: 'right top' }
+                  : activeReaction === 'pirate_salute'
+                    ? { transform: 'rotate(62deg) translate(3px, -11px)', transformBox: 'fill-box', transformOrigin: 'right top' }
+                    : undefined
           }
         >
           <path
@@ -255,15 +355,27 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
           />
         </g>
 
-        {/* Right Pectoral Fin */}
+        {/* Right Pectoral Fin (chin-scratch on thinking_pose, raised on cheer/highFive, droopy on fainted!) */}
         <g
-          className={highFiveRaised || isCrying ? '' : 'anime-kibo-fin-r'}
+          className={
+            highFiveRaised ||
+            isCrying ||
+            isFainted ||
+            activeReaction === 'thinking_pose' ||
+            activeReaction === 'cheer_jump'
+              ? ''
+              : 'anime-kibo-fin-r'
+          }
           style={
-            highFiveRaised && !isCrying
+            (highFiveRaised || activeReaction === 'cheer_jump') && !isCrying && !isFainted
               ? { transform: 'rotate(-58deg)', transformBox: 'fill-box', transformOrigin: 'left bottom' }
-              : isCrying
-                ? { transform: 'rotate(-42deg) translateY(-4px)', transformBox: 'fill-box', transformOrigin: 'left top' }
-                : undefined
+              : activeReaction === 'thinking_pose'
+                ? { transform: 'rotate(-68deg) translate(-10px, -6px)', transformBox: 'fill-box', transformOrigin: 'left top' }
+                : isCrying
+                  ? { transform: 'rotate(-42deg) translateY(-4px)', transformBox: 'fill-box', transformOrigin: 'left top' }
+                  : isFainted
+                    ? { transform: 'rotate(24deg) translateY(6px)', transformBox: 'fill-box', transformOrigin: 'left top' }
+                    : undefined
           }
         >
           <path
@@ -273,31 +385,59 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
             strokeWidth="3.2"
             strokeLinejoin="round"
           />
-          {highFiveRaised && !isCrying && (
+          {highFiveRaised && !isCrying && !isFainted && (
             <circle cx="101" cy="70" r="3.5" fill="#FEF08A" opacity="0.9" />
           )}
         </g>
 
-        {/* Rosy Anime Cheeks */}
+        {/* Rosy Anime Cheeks (puffed bigger when blowing bubbles!) */}
         <ellipse
           cx="37"
           cy="56"
-          rx="5.5"
-          ry="3.2"
+          rx={activeReaction === 'bubble_blow' ? 7 : 5.5}
+          ry={activeReaction === 'bubble_blow' ? 4.4 : 3.2}
           fill="#FB7185"
-          opacity={activeMood === 'giggle' || activeMood === 'excited' || isCrying ? 0.8 : 0.55}
+          opacity={
+            activeMood === 'giggle' ||
+            activeMood === 'excited' ||
+            isCrying ||
+            activeReaction === 'happy_dance' ||
+            activeReaction === 'bubble_blow'
+              ? 0.82
+              : isFainted
+                ? 0.35
+                : 0.55
+          }
         />
         <ellipse
           cx="81"
           cy="56"
-          rx="5.5"
-          ry="3.2"
+          rx={activeReaction === 'bubble_blow' ? 7 : 5.5}
+          ry={activeReaction === 'bubble_blow' ? 4.4 : 3.2}
           fill="#FB7185"
-          opacity={activeMood === 'giggle' || activeMood === 'excited' || isCrying ? 0.8 : 0.55}
+          opacity={
+            activeMood === 'giggle' ||
+            activeMood === 'excited' ||
+            isCrying ||
+            activeReaction === 'happy_dance' ||
+            activeReaction === 'bubble_blow'
+              ? 0.82
+              : isFainted
+                ? 0.35
+                : 0.55
+          }
         />
 
         {/* Expressive Anime Eyes */}
-        {isCrying ? (
+        {isFainted ? (
+          /* Dizzy Anime Spiral Eyes (@ @) when AFK Fainted! */
+          <g fill="none" stroke="#0F2D3A" strokeWidth="2.4" strokeLinecap="round">
+            <circle cx="44" cy="48" r="7.4" fill="#FFFFFF" stroke="#0F2D3A" strokeWidth="2.4" />
+            <path d="M 44 48 C 44 46, 47 46, 47 48 C 47 51, 41 51, 41 47.5 C 41 44, 48 43.5, 48.5 48.5" />
+            <circle cx="74" cy="48" r="7.4" fill="#FFFFFF" stroke="#0F2D3A" strokeWidth="2.4" />
+            <path d="M 74 48 C 74 46, 77 46, 77 48 C 77 51, 71 51, 71 47.5 C 71 44, 78 43.5, 78.5 48.5" />
+          </g>
+        ) : isCrying ? (
           <g>
             {/* Sad drooping eyebrows */}
             <path d="M 36 39 Q 43 37 49 41" fill="none" stroke="#0F2D3A" strokeWidth="2.4" strokeLinecap="round" />
@@ -349,12 +489,20 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
               />
             </g>
           </g>
-        ) : activeMood === 'giggle' ? (
+        ) : activeReaction === 'pirate_salute' ? (
+          /* Confident Pirate Wink Eye! */
+          <g>
+            <path d="M 38 45 L 48 48 L 38 51" fill="none" stroke="#0F2D3A" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="74" cy="47" r="7.2" fill="#0D2230" />
+            <ellipse cx="74" cy="50.5" rx="4.2" ry="2.2" fill="#2DD4BF" opacity="0.85" />
+            <circle cx="71.8" cy="44.3" r="2.8" fill="#FFFFFF" />
+          </g>
+        ) : activeMood === 'giggle' || activeReaction === 'happy_dance' ? (
           <g stroke="#0F2D3A" strokeWidth="3.2" strokeLinecap="round" fill="none">
             <path d="M 38 49 Q 44 41 50 49" />
             <path d="M 68 49 Q 74 41 80 49" />
           </g>
-        ) : activeMood === 'excited' ? (
+        ) : activeMood === 'excited' || activeReaction === 'treasure_sparkle' || activeReaction === 'cheer_jump' ? (
           <g>
             <circle cx="44" cy="47" r="7.5" fill="#0D2230" />
             <circle cx="74" cy="47" r="7.5" fill="#0D2230" />
@@ -400,7 +548,13 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
         )}
 
         {/* Expressive Mouth */}
-        {isCrying ? (
+        {isFainted ? (
+          <g>
+            {/* Wobbly knocked-out mouth with cute little tongue sticking out */}
+            <path d="M 50 60 Q 59 57 68 60" fill="none" stroke="#0F2D3A" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M 55 59.5 C 55 67, 63 67, 63 59.5 Z" fill="#FB7185" stroke="#0F2D3A" strokeWidth="1.8" />
+          </g>
+        ) : isCrying ? (
           <g>
             {/* Wobbly crying open pout mouth */}
             <path
@@ -412,6 +566,14 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
             />
             <ellipse cx="59" cy="63.5" rx="4.5" ry="2" fill="#FB7185" />
           </g>
+        ) : activeReaction === 'bubble_blow' ? (
+          /* Cute puffed 'o' mouth blowing ocean bubbles */
+          <g>
+            <circle cx="59" cy="60" r="3.6" fill="#9F1239" stroke="#0F2D3A" strokeWidth="2.2" />
+            <circle cx="73" cy="54" r="3.4" fill="#E0F2FE" stroke="#38BDF8" strokeWidth="1.5" opacity="0.9" className="anime-bubble-rise" />
+            <circle cx="84" cy="42" r="5" fill="#E0F2FE" stroke="#7DD3FC" strokeWidth="1.6" opacity="0.85" className="anime-bubble-rise" style={{ animationDelay: '0.35s' }} />
+            <circle cx="94" cy="28" r="3.8" fill="#FFFFFF" stroke="#38BDF8" strokeWidth="1.4" opacity="0.8" className="anime-bubble-rise" style={{ animationDelay: '0.7s' }} />
+          </g>
         ) : activeMood === 'oops' ? (
           <path
             d="M 52 60 Q 55.5 57 59 60 Q 62.5 63 66 60"
@@ -420,7 +582,7 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
             strokeWidth="2.6"
             strokeLinecap="round"
           />
-        ) : activeMood === 'thinking' ? (
+        ) : activeMood === 'thinking' || activeReaction === 'thinking_pose' ? (
           <g>
             <ellipse cx="59" cy="60" rx="4.5" ry="3.8" fill="#0F2D3A" />
             <text
@@ -433,6 +595,9 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
             >
               ?
             </text>
+            {activeReaction === 'thinking_pose' && (
+              <circle cx="95" cy="20" r="4" fill="#FEF08A" stroke="#F59E0B" strokeWidth="1.5" className="anime-gold-glint" />
+            )}
           </g>
         ) : activeMood === 'happy' || activeMood === 'excited' || activeMood === 'giggle' ? (
           <g>
@@ -459,11 +624,105 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
             <polygon points="60,59 62.5,62 65,58.5" fill="#FFFFFF" />
           </g>
         )}
+
+        {/* Reaction Floating Props (Music Notes, Treasure Sparkles, Surf Splash) */}
+        {activeReaction === 'happy_dance' && (
+          <g className="anime-kibo-note" fontFamily="sans-serif" fontWeight="900">
+            <text x="16" y="34" fill="#FEF08A" stroke="#78350F" strokeWidth="0.6" fontSize="15">♪</text>
+            <text x="93" y="30" fill="#FB7185" stroke="#881337" strokeWidth="0.5" fontSize="14">♫</text>
+          </g>
+        )}
+        {activeReaction === 'treasure_sparkle' && (
+          <g>
+            <path d="M 20 28 L 22.5 33 L 28 35.5 L 22.5 38 L 20 43 L 17.5 38 L 12 35.5 L 17.5 33 Z" fill="#FEF08A" className="anime-gold-glint" />
+            <path d="M 98 30 L 100 34 L 104 36 L 100 38 L 98 42 L 96 38 L 92 36 L 96 34 Z" fill="#FBBF24" className="anime-gold-glint" style={{ animationDelay: '0.35s' }} />
+          </g>
+        )}
+        {activeReaction === 'surfer_wave' && (
+          <g opacity="0.88">
+            <path d="M 10 92 Q 35 80 60 90 T 112 88" fill="none" stroke="#E0F2FE" strokeWidth="3.5" strokeLinecap="round" />
+            <circle cx="18" cy="80" r="3" fill="#FFFFFF" />
+            <circle cx="101" cy="79" r="3.2" fill="#FFFFFF" />
+          </g>
+        )}
+        </g>
       </g>
     </svg>
   );
 
-  const floatingHearts = petCount > 0 && !isCrying && (
+  const getReactionMotion = () => {
+    if (isFainted) {
+      return {
+        animate: { y: [0, 3, 2], rotate: [0, -4, -3], scaleY: [1, 0.94, 0.96] },
+        transition: { duration: 1.6, repeat: Infinity, repeatType: 'reverse' as const, ease: 'easeInOut' as const },
+      };
+    }
+    if (isGiggling) {
+      return {
+        animate: { y: [0, -10, 0, -5, 0], scaleX: [1, 0.92, 1.08, 1], scaleY: [1, 1.1, 0.92, 1] },
+        transition: { duration: 0.45, ease: 'easeOut' as const },
+      };
+    }
+    switch (activeReaction) {
+      case 'happy_dance':
+        return {
+          animate: {
+            y: [0, -7, 0, -7, 0],
+            rotate: [0, -9, 9, -8, 8, 0],
+            scaleX: [1, 1.06, 0.95, 1.06, 1],
+          },
+          transition: { duration: 1.05, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'thinking_pose':
+        return {
+          animate: { rotate: [0, -7, -5, -7, 0], y: [0, -2, 0] },
+          transition: { duration: 1.7, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'cheer_jump':
+        return {
+          animate: {
+            y: [0, -13, 0, -9, 0],
+            scaleX: [1, 0.93, 1.08, 0.96, 1],
+            scaleY: [1, 1.11, 0.92, 1.06, 1],
+          },
+          transition: { duration: 0.95, repeat: Infinity, ease: 'easeOut' as const },
+        };
+      case 'pirate_salute':
+        return {
+          animate: { rotate: [0, 6, 4, 6, 0], scale: [1, 1.05, 1.03, 1] },
+          transition: { duration: 1.35, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'treasure_sparkle':
+        return {
+          animate: { scale: [1, 1.08, 0.97, 1.07, 1], rotate: [0, -4, 4, -3, 0] },
+          transition: { duration: 1.1, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'bubble_blow':
+        return {
+          animate: { scaleX: [1, 1.08, 0.98, 1], scaleY: [1, 0.95, 1.03, 1] },
+          transition: { duration: 1.3, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'surfer_wave':
+        return {
+          animate: { rotate: [-10, 9, -8, 6, -10], x: [-2.5, 2.5, -2.5] },
+          transition: { duration: 1.35, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      case 'cosmic_float':
+        return {
+          animate: { y: [0, -9, -4, -10, 0], rotate: [0, 5, -5, 0] },
+          transition: { duration: 1.9, repeat: Infinity, ease: 'easeInOut' as const },
+        };
+      default:
+        return {
+          animate: { y: 0, x: 0, rotate: 0, scale: 1, scaleX: 1, scaleY: 1 },
+          transition: { duration: 0.35, ease: 'easeOut' as const },
+        };
+    }
+  };
+
+  const reactionMotion = getReactionMotion();
+
+  const floatingHearts = petCount > 0 && !isCrying && !isFainted && (
     <div key={petCount} className="pointer-events-none absolute -top-2 inset-x-0 flex justify-center gap-2 z-20">
       <span className="animate-float-heart text-[#FB7185] font-extrabold text-sm drop-shadow">♥</span>
       <span
@@ -477,11 +736,13 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
 
   if (!interactive || isCrying) {
     return (
-      <div
+      <motion.div
+        animate={reactionMotion.animate}
+        transition={reactionMotion.transition}
         className={`relative shrink-0 ${sizeClass} border-2 border-[#F5C156]/90 shadow-lg overflow-visible flex items-center justify-center ${className}`}
       >
         <div className="w-full h-full rounded-[inherit] overflow-hidden">{renderSvg()}</div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -491,14 +752,16 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
       onClick={handlePet}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.9, y: 2 }}
-      animate={
-        isGiggling
-          ? { y: [0, -10, 0, -5, 0], scaleX: [1, 0.92, 1.08, 1], scaleY: [1, 1.1, 0.92, 1] }
-          : { y: 0, scaleX: 1, scaleY: 1 }
-      }
-      transition={{ duration: 0.45, ease: 'easeOut' }}
-      aria-label="Kibo si Hiu Gemoy"
-      className={`relative shrink-0 ${sizeClass} border-2 border-[#F5C156]/90 shadow-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] ${className}`}
+      animate={reactionMotion.animate}
+      transition={reactionMotion.transition}
+      aria-label={isFainted ? 'Kibo pingsan karena menunggu terlalu lama, ketuk untuk membangunkan' : 'Kibo si Hiu Gemoy'}
+      className={`relative shrink-0 ${sizeClass} border-2 ${
+        isFainted
+          ? 'border-[#94A3B8] shadow-md'
+          : activeReaction === 'cosmic_float'
+            ? 'border-[#E879F9] shadow-[0_0_16px_rgba(232,121,249,0.65)]'
+            : 'border-[#F5C156]/90 shadow-lg'
+      } cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F59E0B] ${className}`}
     >
       {floatingHearts}
       <div className="w-full h-full rounded-[inherit] overflow-hidden">{renderSvg()}</div>

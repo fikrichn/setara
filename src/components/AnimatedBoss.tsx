@@ -40,6 +40,7 @@ interface AnimatedBossProps {
   state: BossAnimState;
   phonkPlaying: boolean;
   cosmicMode?: boolean;
+  isSleeping?: boolean;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   interactive?: boolean;
   onTaunt?: () => void;
@@ -68,6 +69,7 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
   state,
   phonkPlaying,
   cosmicMode = false,
+  isSleeping = false,
   size = 'md',
   interactive = true,
   onTaunt,
@@ -650,24 +652,39 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
       <rect x="0" y="0" width="120" height="120" rx="22" fill={`url(#ctBg-${uid})`} />
       {renderEnragedAura(60, 66, 47)}
 
-      {/* Lazy floating Zzz bubble when tapped or mocking */}
-      {activeExpr && (
-        <text
-          x="86"
-          y="34"
-          fill="#FEF08A"
-          fontSize="13"
-          fontWeight="800"
-          className="anime-bubble-rise"
-        >
-          Zzz
-        </text>
+      {/* Sleeping or lazy floating Zzz bubble */}
+      {(isSleeping || activeExpr) && (
+        <g>
+          <text
+            x="84"
+            y="34"
+            fill="#FEF08A"
+            fontSize="14"
+            fontWeight="900"
+            className="anime-kibo-zzz"
+          >
+            Zzz
+          </text>
+          {isSleeping && (
+            <text
+              x="98"
+              y="22"
+              fill="#BAE6FD"
+              fontSize="10"
+              fontWeight="800"
+              className="anime-kibo-zzz"
+              style={{ animationDelay: '0.7s' }}
+            >
+              z
+            </text>
+          )}
+        </g>
       )}
 
       <ellipse cx="60" cy="109" rx="38" ry="5.5" fill="#000000" opacity="0.4" />
 
       <g className={beatClass}>
-        <g className={state === 'defeated' ? '' : 'anime-cannon-recoil'}>
+        <g className={state === 'defeated' || isSleeping ? '' : 'anime-cannon-recoil'}>
           <g transform="rotate(-24 38 42)">
             <rect x="24" y="14" width="16" height="30" rx="4" fill={`url(#ctIron-${uid})`} stroke="#020617" strokeWidth="2.6" />
             <rect x="22" y="12" width="20" height="6" rx="2.5" fill={`url(#ctGold-${uid})`} stroke="#78350F" strokeWidth="1.8" />
@@ -679,7 +696,7 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
             <rect x="81" y="28" width="14" height="4" rx="1.5" fill="#F59E0B" />
           </g>
 
-          {state !== 'defeated' && (
+          {state !== 'defeated' && !isSleeping && (
             <>
               <g className="anime-muzzle-flash">
                 <polygon
@@ -701,11 +718,11 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
           )}
         </g>
 
-        <g className="anime-foot-l">
+        <g className={isSleeping ? '' : 'anime-foot-l'}>
           <rect x="24" y="88" width="19" height="16" rx="6" fill="#0F766E" stroke="#042F2E" strokeWidth="3" />
           <path d="M 28 102 L 28 97 M 34 102 L 34 97 M 40 102 L 40 97" stroke="#FEF3C7" strokeWidth="2" strokeLinecap="round" />
         </g>
-        <g className="anime-foot-r">
+        <g className={isSleeping ? '' : 'anime-foot-r'}>
           <rect x="77" y="88" width="19" height="16" rx="6" fill="#0F766E" stroke="#042F2E" strokeWidth="3" />
           <path d="M 81 102 L 81 97 M 87 102 L 87 97 M 93 102 L 93 97" stroke="#FEF3C7" strokeWidth="2" strokeLinecap="round" />
         </g>
@@ -734,13 +751,27 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
           strokeWidth="3.2"
         />
 
-        {renderStandardEyes(49, 71, 64, {
-          r: 6,
-          sleepy: activeExpr,
-          iris: state === 'enraged' ? '#FF3B30' : '#FDE047',
-        })}
+        {isSleeping ? (
+          /* Peacefully closed sleeping eyes */
+          <g stroke="#042F2E" strokeWidth="3" strokeLinecap="round" fill="none">
+            <path d="M 43 64 Q 49 69 55 64" />
+            <path d="M 65 64 Q 71 69 77 64" />
+          </g>
+        ) : (
+          renderStandardEyes(49, 71, 64, {
+            r: 6,
+            sleepy: activeExpr,
+            iris: state === 'enraged' ? '#FF3B30' : '#FDE047',
+          })
+        )}
 
-        {state === 'hit' || activeExpr ? (
+        {isSleeping ? (
+          /* Cute sleeping snore bubble */
+          <g>
+            <circle cx="60" cy="76" r="3" fill="#042F2E" />
+            <circle cx="67" cy="74" r="5" fill="#E0F2FE" stroke="#38BDF8" strokeWidth="1.5" opacity="0.85" className="anime-kibo-breathe" />
+          </g>
+        ) : state === 'hit' || activeExpr ? (
           <ellipse cx="60" cy="77" rx="5.5" ry="5.5" fill="#042F2E" />
         ) : state === 'defeated' ? (
           <path d="M 52 78 Q 60 73 68 78" fill="none" stroke="#042F2E" strokeWidth="2.8" strokeLinecap="round" />

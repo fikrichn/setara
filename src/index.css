@@ -704,6 +704,39 @@
   animation: cosmicVortex 11s linear infinite;
 }
 
+/* Kibo Fainted & Diverse Reaction Keyframes */
+@keyframes kiboDizzyOrbit {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.anime-kibo-dizzy {
+  animation: kiboDizzyOrbit 2.1s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes kiboZzzFloat {
+  0% { opacity: 0; transform: translate(0, 4px) scale(0.7); }
+  30% { opacity: 1; transform: translate(3px, -4px) scale(1); }
+  100% { opacity: 0; transform: translate(8px, -16px) scale(1.15); }
+}
+.anime-kibo-zzz {
+  animation: kiboZzzFloat 2.2s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes kiboNoteDance {
+  0% { opacity: 0; transform: translateY(6px) rotate(-10deg) scale(0.75); }
+  30% { opacity: 1; transform: translateY(-4px) rotate(10deg) scale(1.08); }
+  100% { opacity: 0; transform: translateY(-18px) rotate(-8deg) scale(0.95); }
+}
+.anime-kibo-note {
+  animation: kiboNoteDance 1.3s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-hint-ring,
   .animate-pop-in,
@@ -756,7 +789,10 @@
   .animate-boss-heal,
   .cosmic-star-twinkle,
   .cosmic-meteor,
-  .cosmic-vortex {
+  .cosmic-vortex,
+  .anime-kibo-dizzy,
+  .anime-kibo-zzz,
+  .anime-kibo-note {
     animation: none;
   }
 }

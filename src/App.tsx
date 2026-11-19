@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Award,
   BookOpen,
   Compass,
   Crown,
@@ -18,11 +19,14 @@ import { AnimatedKibo } from './components/AnimatedKibo';
 import { BeachBackdrop } from './components/BeachBackdrop';
 import { GameBoard } from './components/GameBoard';
 import { KiboAvatar } from './components/KiboCompanion';
+import { KiboIntroVideo } from './components/KiboIntroVideo';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PocketGuide } from './components/PocketGuide';
+import { ProfileBadgesCard } from './components/ProfileBadgesCard';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { ExitConfirmModal, SettingsModal } from './components/SettingsExitModals';
 import { TreasureMap } from './components/TreasureMap';
+import { evaluateBadges } from './game/achievements';
 import { generatePracticeLevel } from './game/algebraEngine';
 import { ALL_LEVELS, CHAPTERS, getNextLevel } from './game/levels';
 import { phonkMusic } from './game/phonkMusic';
@@ -35,6 +39,12 @@ type GameScreen = 'LOBBY' | 'MAP' | 'ARCADE' | 'CODEX';
 const STORAGE_KEY = 'setara_progress_v1';
 
 function loadProgress(): ProgressStore {
+  const defaultStats = {
+    flawlessStageIds: [] as string[],
+    retryCount: 0,
+    totalTransposes: 0,
+    noHintBossWins: 0,
+  };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -51,6 +61,17 @@ function loadProgress(): ProgressStore {
           typeof parsed.sfxVolume === 'number'
             ? Math.max(0, Math.min(1, parsed.sfxVolume))
             : 0.85,
+        stats: {
+          flawlessStageIds: Array.isArray(parsed.stats?.flawlessStageIds)
+            ? parsed.stats.flawlessStageIds
+            : [],
+          retryCount:
+            typeof parsed.stats?.retryCount === 'number' ? parsed.stats.retryCount : 0,
+          totalTransposes:
+            typeof parsed.stats?.totalTransposes === 'number' ? parsed.stats.totalTransposes : 0,
+          noHintBossWins:
+            typeof parsed.stats?.noHintBossWins === 'number' ? parsed.stats.noHintBossWins : 0,
+        },
       };
     }
   } catch {
@@ -62,6 +83,7 @@ function loadProgress(): ProgressStore {
     soundEnabled: true,
     musicVolume: 0.7,
     sfxVolume: 0.85,
+    stats: defaultStats,
   };
 }
 
@@ -77,6 +99,18 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitedGame, setExitedGame] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+  const [recentBadgeToast, setRecentBadgeToast] = useState<{
+    title: string;
+    kiboPraise: string;
+  } | null>(null);
+  const badgeToastTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (badgeToastTimerRef.current) window.clearTimeout(badgeToastTimerRef.current);
+    };
+  }, []);
 
   // Sync audio volumes & persistence
   useEffect(() => {
@@ -186,21 +220,81 @@ export default function App() {
     setExitedGame(true);
   };
 
-  const handleCompleteLevel = (level: LevelDef, moves: number, stars: number) => {
+  const announceNewBadges = (prevState: ProgressStore, nextState: ProgressStore) => {
+    const prevUnlocked = new Set(
+      evaluateBadges(prevState)
+        .filter((b) => b.unlocked)
+        .map((b) => b.id)
+    );
+    const newlyUnlocked = evaluateBadges(nextState).find(
+      (b) => b.unlocked && !prevUnlocked.has(b.id)
+    );
+    if (newlyUnlocked) {
+      sound.playKiboGiggle();
+      setRecentBadgeToast({
+        title: newlyUnlocked.title,
+        kiboPraise: newlyUnlocked.kiboPraise,
+      });
+      if (badgeToastTimerRef.current) window.clearTimeout(badgeToastTimerRef.current);
+      badgeToastTimerRef.current = window.setTimeout(() => setRecentBadgeToast(null), 4600);
+    }
+  };
+
+  const handleCompleteLevel = (
+    level: LevelDef,
+    moves: number,
+    stars: number,
+    meta?: { flawless: boolean; usedHint: boolean; transposes: number }
+  ) => {
     setProgress((prev) => {
+      const prevFlawless = prev.stats.flawlessStageIds;
+      const shouldAddFlawless =
+        !level.isPractice && meta?.flawless && !prevFlawless.includes(level.id);
+      const nextStats = {
+        flawlessStageIds: shouldAddFlawless ? [...prevFlawless, level.id] : prevFlawless,
+        retryCount: prev.stats.retryCount,
+        totalTransposes: prev.stats.totalTransposes + (meta?.transposes ?? 0),
+        noHintBossWins:
+          prev.stats.noHintBossWins + (level.isBoss && !meta?.usedHint ? 1 : 0),
+      };
+
+      let nextState: ProgressStore;
       if (level.isPractice) {
-        return { ...prev, practiceSolved: prev.practiceSolved + 1 };
+        nextState = {
+          ...prev,
+          practiceSolved: prev.practiceSolved + 1,
+          stats: nextStats,
+        };
+      } else {
+        const existing = prev.completed[level.id];
+        const bestStars = Math.max(existing?.stars ?? 0, stars);
+        const bestMoves = existing ? Math.min(existing.bestMoves, moves) : moves;
+        nextState = {
+          ...prev,
+          completed: {
+            ...prev.completed,
+            [level.id]: { stars: bestStars, bestMoves },
+          },
+          stats: nextStats,
+        };
       }
-      const existing = prev.completed[level.id];
-      const bestStars = Math.max(existing?.stars ?? 0, stars);
-      const bestMoves = existing ? Math.min(existing.bestMoves, moves) : moves;
-      return {
+
+      announceNewBadges(prev, nextState);
+      return nextState;
+    });
+  };
+
+  const handleRetryStage = () => {
+    setProgress((prev) => {
+      const nextState: ProgressStore = {
         ...prev,
-        completed: {
-          ...prev.completed,
-          [level.id]: { stars: bestStars, bestMoves },
+        stats: {
+          ...prev.stats,
+          retryCount: prev.stats.retryCount + 1,
         },
       };
+      announceNewBadges(prev, nextState);
+      return nextState;
     });
   };
 
@@ -251,6 +345,21 @@ export default function App() {
     );
   }
 
+  // CINEMATIC ANIMATED INTRO VIDEO: KIBO MEETS THE PLAYER ON GAME START
+  if (showIntro) {
+    return (
+      <>
+        <KiboIntroVideo
+          onFinish={() => {
+            setShowIntro(false);
+            stageMusic.start();
+          }}
+        />
+        <OfflineIndicator />
+      </>
+    );
+  }
+
   const modals = (
     <>
       <SettingsModal
@@ -261,6 +370,11 @@ export default function App() {
         onChangeMusicVolume={handleChangeMusicVolume}
         onChangeSfxVolume={handleChangeSfxVolume}
         onReturnToMenu={handleReturnToMenu}
+        onReplayIntro={() => {
+          setSettingsOpen(false);
+          setActiveLevel(null);
+          setShowIntro(true);
+        }}
         onRequestExit={() => {
           setSettingsOpen(false);
           setExitConfirmOpen(true);
@@ -275,6 +389,29 @@ export default function App() {
     </>
   );
 
+  const badgeToast = recentBadgeToast && (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-md rounded-2xl bg-gradient-to-r from-[#FEF08A] via-[#FDE047] to-[#FBBF24] border-2 border-[#FFFFFF] text-[#291802] px-4 py-3 shadow-2xl flex items-center gap-3 animate-pop-in"
+    >
+      <div className="w-10 h-10 rounded-xl bg-[#78350F] text-[#FEF08A] flex items-center justify-center shrink-0 shadow">
+        <Award className="w-6 h-6" aria-hidden="true" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#92400E]">
+          Badge Pencapaian Terbuka!
+        </div>
+        <div className="font-display font-extrabold text-base leading-tight text-[#0D354C] truncate">
+          {recentBadgeToast.title}
+        </div>
+        <div className="text-xs font-bold text-[#78350F] truncate">
+          {recentBadgeToast.kiboPraise}
+        </div>
+      </div>
+    </div>
+  );
+
   // FULL-SCREEN ACTIVE GAME BOARD
   if (activeLevel) {
     const nextLvl = activeLevel.isPractice ? null : getNextLevel(activeLevel.id);
@@ -285,6 +422,7 @@ export default function App() {
           onOpenSettings={() => setSettingsOpen(true)}
           onExit={() => setActiveLevel(null)}
           onComplete={handleCompleteLevel}
+          onRetryStage={handleRetryStage}
           onNextLevel={() => {
             if (nextLvl) {
               setSelectedChapterId(nextLvl.chapterId);
@@ -296,6 +434,7 @@ export default function App() {
           hasNextLevel={!!nextLvl}
           onNewPractice={() => setActiveLevel(generatePracticeLevel(practiceDifficulty))}
         />
+        {badgeToast}
         {modals}
         <OfflineIndicator />
       </>
@@ -396,8 +535,18 @@ export default function App() {
               <div className="w-full rounded-3xl game-panel p-4 sm:p-5 flex items-center gap-4 text-left">
                 <KiboAvatar
                   size="lg"
+                  chapterId={selectedChapterId}
                   mood={lobbyKiboLine ? 'excited' : 'happy'}
                   interactive
+                  onFaintChange={(fainted) => {
+                    if (fainted) {
+                      setLobbyKiboLine(
+                        'Zzz... Kibo pingsan kelamaan nungguin kamu lebih dari 1 menit! Sentuh layar dong!'
+                      );
+                    } else {
+                      setLobbyKiboLine('Hwaaah! Kibo sudah bangun! Ayo main lagi yuk!');
+                    }
+                  }}
                   onInteract={(quip) => setLobbyKiboLine(quip)}
                 />
                 <div className="min-w-0 flex-1">
@@ -552,6 +701,11 @@ export default function App() {
                 </div>
               </div>
             </section>
+
+            {/* Full-Width Lobby Player Profile & Achievement Badges Showcase */}
+            <div className="lg:col-span-12">
+              <ProfileBadgesCard progress={progress} />
+            </div>
           </div>
         )}
 
@@ -682,6 +836,7 @@ export default function App() {
         </div>
       </nav>
 
+      {badgeToast}
       {modals}
       <OfflineIndicator />
     </div>

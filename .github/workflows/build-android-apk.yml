@@ -4,6 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -49,8 +54,37 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
+      - name: Prepare Release APK file & tag
+        id: release_meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_NAME="v1.0.${GITHUB_RUN_NUMBER}"
+          fi
+          APK_FILE="Setara-${TAG_NAME}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "${APK_FILE}"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "apk_file=${APK_FILE}" >> "$GITHUB_OUTPUT"
+
       - name: Upload Setara APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: setara-android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.release_meta.outputs.apk_file }}
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: Setara Android ${{ steps.release_meta.outputs.tag_name }}
+          body: |
+            Build otomatis APK Android **Setara — Timbangan Pindah Ruas**.
+            Unduh file `${{ steps.release_meta.outputs.apk_file }}` di bawah ini untuk memasang di perangkat Android.
+          generate_release_notes: true
+          make_latest: true
+          files: |
+            ${{ steps.release_meta.outputs.apk_file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

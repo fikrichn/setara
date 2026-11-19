@@ -66,7 +66,13 @@ interface GameBoardProps {
   level: LevelDef;
   onOpenSettings: () => void;
   onExit: () => void;
-  onComplete: (level: LevelDef, moves: number, stars: number) => void;
+  onComplete: (
+    level: LevelDef,
+    moves: number,
+    stars: number,
+    meta?: { flawless: boolean; usedHint: boolean; transposes: number }
+  ) => void;
+  onRetryStage?: (level: LevelDef) => void;
   onNextLevel: () => void;
   hasNextLevel: boolean;
   onNewPractice?: () => void;
@@ -104,6 +110,9 @@ interface FlyingTileAnim {
   id: number;
   fromX: number;
   fromY: number;
+  bridgeX: number;
+  bridgeY: number;
+  apexY: number;
   toX: number;
   toY: number;
   toSide: Side;
@@ -114,6 +123,8 @@ interface FlyingTileAnim {
   startOp?: OperatorCardMeta;
   endOp?: OperatorCardMeta;
   bridgeTag: string;
+  bridgeStartSym?: Term;
+  bridgeEndSym?: Term;
 }
 
 interface BridgeFlashState {
@@ -151,6 +162,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   onOpenSettings,
   onExit,
   onComplete,
+  onRetryStage,
   onNextLevel,
   hasNextLevel,
   onNewPractice,
@@ -158,7 +170,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const isBossLevel = !!level.isBoss && !!level.boss && level.boss.phases.length > 0;
   const isStageOne = level.levelNumber === 1 && !level.isPractice;
   const bossGimmick = level.boss?.gimmick;
-  const totalBossTime = level.boss?.timeLimitSeconds ?? 90;
+  const totalBossTime = level.boss?.timeLimitSeconds ?? 120;
   const maxBossMistakes = level.boss?.maxMistakes ?? 4;
   const bossPenaltySec = level.boss?.penaltySeconds ?? 30;
 
@@ -176,10 +188,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [bossDialogue, setBossDialogue] = useState(level.boss?.introLine ?? '');
   const [bossTimeLeft, setBossTimeLeft] = useState(totalBossTime);
   const [bossMistakes, setBossMistakes] = useState(0);
+  const [bossAwake, setBossAwake] = useState(() => !(isBossLevel && bossGimmick === 'freeze_penalty'));
   const [bossTimedOut, setBossTimedOut] = useState(false);
   const [bossDefeatReason, setBossDefeatReason] = useState<'timeout' | 'mistakes'>('timeout');
   const [timeBonusFlash, setTimeBonusFlash] = useState(false);
   const [timePenaltyFlash, setTimePenaltyFlash] = useState(false);
+  const [penaltyFlashText, setPenaltyFlashText] = useState('');
   const bossTauntIdxRef = useRef(0);
   const timeBonusTimerRef = useRef<number | null>(null);
   const timePenaltyTimerRef = useRef<number | null>(null);
@@ -235,8 +249,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const suppressClickRef = useRef(false);
   const leftPanRef = useRef<HTMLDivElement | null>(null);
   const rightPanRef = useRef<HTMLDivElement | null>(null);
+  const bridgeRef = useRef<HTMLDivElement | null>(null);
   const flyTimerRef = useRef<number[]>([]);
   const moodTimerRef = useRef<number | null>(null);
+  const hadMistakeRef = useRef(false);
+  const usedHintRef = useRef(false);
+  const transposesRunRef = useRef(0);
 
   const flashKiboMood = useCallback((nextMood: KiboMood, ms = 1700) => {
     setKiboMood(nextMood);
@@ -262,23 +280,26 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return Math.max(0, totalBossPhases - bossPhaseIndex);
   }, [isBossLevel, bossGimmick, bossPreHealOneHp, bossHasHealed, bossPhaseIndex, totalBossPhases]);
 
-  const isTimeFrozen = isBossLevel && bossGimmick === 'freeze_penalty';
-  const isSpeedUp =
-    isBossLevel &&
-    !solvedInfo &&
-    !bossTimedOut &&
-    bossCurrentHp === 1 &&
-    (bossGimmick === 'speed_enrage' || bossGimmick === 'cosmic_many_hp');
+  const hasMistakeRule = isBossLevel && bossGimmick === 'freeze_penalty';
+  const isBossSleeping = hasMistakeRule && !bossAwake;
+  const isTimeFrozen = isBossSleeping;
   const cosmicMode =
     isBossLevel &&
     !solvedInfo &&
     !bossTimedOut &&
-    bossCurrentHp === 1 &&
-    bossGimmick === 'cosmic_many_hp';
+    bossGimmick === 'cosmic_many_hp' &&
+    bossCurrentHp > 0 &&
+    bossCurrentHp <= 5;
+  const isSpeedUp =
+    isBossLevel &&
+    !solvedInfo &&
+    !bossTimedOut &&
+    ((bossGimmick === 'speed_enrage' && bossCurrentHp === 1) || cosmicMode);
+  const timeSpeedMultiplier = cosmicMode ? 4 : isSpeedUp ? 2 : 1;
 
   const phonkActive = isBossLevel && !solvedInfo && !bossTimedOut && bossCurrentHp > 0;
   const bossIntensity: 'normal' | 'enraged' =
-    bossCurrentHp === 1 || bossHasHealed ? 'enraged' : 'normal';
+    bossCurrentHp === 1 || bossHasHealed || cosmicMode ? 'enraged' : 'normal';
 
   useEffect(() => {
     if (phonkActive) {
@@ -300,8 +321,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, []);
 
   // Boss fight countdown timer:
-  // - Bab 3 (freeze_penalty): frozen (does NOT tick down; wrong moves deduct 30s!)
-  // - Bab 1 & Bab 5 at 1 HP: 2x faster tick (500ms)!
+  // - Bab 3 (freeze_penalty): frozen while asleep; starts ticking at 1x once player wakes Kura Meriam!
+  // - Bab 1 at 1 HP: 2x faster tick (500ms)!
+  // - Bab 5 at <=5 HP (Cosmic Rush): 4x faster tick (250ms)!
   // - Others: normal 1000ms tick.
   useEffect(() => {
     if (
@@ -316,7 +338,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     ) {
       return;
     }
-    const tickMs = isSpeedUp ? 500 : 1000;
+    const tickMs = timeSpeedMultiplier === 4 ? 250 : timeSpeedMultiplier === 2 ? 500 : 1000;
     const intervalId = window.setInterval(() => {
       setBossTimeLeft((prev) => {
         if (prev <= 1) {
@@ -339,7 +361,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     isBossLevel,
     level.boss,
     isTimeFrozen,
-    isSpeedUp,
+    timeSpeedMultiplier,
     solvedInfo,
     bossTimedOut,
     bossHitAnim,
@@ -357,12 +379,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setBossPreHealOneHp(false);
     setBossStrikeAnim(false);
     setBossDialogue(level.boss?.introLine ?? '');
-    setBossTimeLeft(level.boss?.timeLimitSeconds ?? 90);
+    setBossTimeLeft(level.boss?.timeLimitSeconds ?? 120);
     setBossMistakes(0);
+    setBossAwake(!(isBossLevel && level.boss?.gimmick === 'freeze_penalty'));
     setBossTimedOut(false);
     setBossDefeatReason('timeout');
     setTimeBonusFlash(false);
     setTimePenaltyFlash(false);
+    setPenaltyFlashText('');
     bossTauntIdxRef.current = 0;
     setEqState(startEq);
     setUndoStack([]);
@@ -389,6 +413,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setSolvedInfo(null);
     setShowMobileLog(false);
     setTutorialIndex(level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null);
+    hadMistakeRef.current = false;
+    usedHintRef.current = false;
+    transposesRunRef.current = 0;
     return clearFlyTimers;
   }, [level, isBossLevel, clearFlyTimers, buildInitialExplanation]);
 
@@ -409,33 +436,39 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     (
       term: Term,
       fromSide: Side,
-      dragKind: DragKind,
-      originPoint?: { x: number; y: number }
+      dragKind: DragKind
     ) => {
+      const srcPan = fromSide === 'left' ? leftPanRef.current : rightPanRef.current;
       const targetPan = fromSide === 'left' ? rightPanRef.current : leftPanRef.current;
-      if (!targetPan) return;
+      if (!targetPan || !srcPan) return;
 
-      let fromX = originPoint?.x ?? 0;
-      let fromY = originPoint?.y ?? 0;
+      const sr = srcPan.getBoundingClientRect();
+      const tr = targetPan.getBoundingClientRect();
+      const br = bridgeRef.current?.getBoundingClientRect();
 
-      if (!originPoint) {
-        const el = document.querySelector(`[data-term-id="${term.id}"]`) as HTMLElement | null;
-        if (el) {
-          const r = el.getBoundingClientRect();
-          fromX = r.left + r.width / 2;
-          fromY = r.top + r.height / 2;
-        } else {
-          const srcPan = fromSide === 'left' ? leftPanRef.current : rightPanRef.current;
-          if (!srcPan) return;
-          const sr = srcPan.getBoundingClientRect();
-          fromX = sr.left + sr.width / 2;
-          fromY = sr.top + sr.height / 2;
+      let fromX = sr.left + sr.width / 2;
+      let fromY = sr.top + sr.height / 2;
+
+      // Always launch from the true tile position on fromSide so children clearly see
+      // the card vault from its origin side across the '=' sign to the opposite side!
+      const el = document.querySelector(`[data-term-id="${term.id}"]`) as HTMLElement | null;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const midLine = br ? br.left + br.width / 2 : (sr.right + tr.left) / 2;
+        const isOnSourceSide = fromSide === 'left' ? cx <= midLine : cx >= midLine;
+        if (isOnSourceSide && r.width > 0 && r.height > 0) {
+          fromX = cx;
+          fromY = cy;
         }
       }
 
-      const tr = targetPan.getBoundingClientRect();
       const toX = tr.left + tr.width / 2;
       const toY = tr.top + tr.height / 2;
+      const bridgeX = br ? br.left + br.width / 2 : (fromX + toX) / 2;
+      const bridgeY = br ? br.top + br.height / 2 : (fromY + toY) / 2;
+      const apexY = Math.max(76, Math.min(fromY, toY, bridgeY) - 92);
 
       let startTerm: Term | undefined;
       let endTerm: Term | undefined;
@@ -465,19 +498,25 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       } else if (term.kind === 'const') {
         startTerm = { ...term };
         endTerm = { ...term, value: -term.value };
-        bridgeTag = term.value > 0 ? '+ → −' : '− → +';
+        const absVal = Math.abs(term.value);
+        bridgeTag = term.value > 0 ? `+${absVal} → −${absVal}` : `−${absVal} → +${absVal}`;
       } else if (term.kind === 'var') {
         startTerm = { ...term };
         endTerm =
           pureSymbolsMode && term.coeff === 1 && term.denom === 1
             ? { ...term }
             : { ...term, coeff: -term.coeff };
-        bridgeTag =
-          pureSymbolsMode && term.coeff === 1 && term.denom === 1
-            ? 'Pindah Ruas'
-            : term.coeff > 0
-              ? '+x → −x'
-              : '−x → +x';
+        if (pureSymbolsMode && term.coeff === 1 && term.denom === 1) {
+          bridgeTag = 'Pindah Ruas';
+        } else {
+          const absC = Math.abs(term.coeff);
+          const cStr = absC === 1 ? '' : `${absC}`;
+          const frac = term.denom > 1 ? `/${term.denom}` : '';
+          bridgeTag =
+            term.coeff > 0
+              ? `+${cStr}x${frac} → −${cStr}x${frac}`
+              : `−${cStr}x${frac} → +${cStr}x${frac}`;
+        }
       }
 
       const toSide: Side = fromSide === 'left' ? 'right' : 'left';
@@ -492,6 +531,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         id: Date.now(),
         fromX,
         fromY,
+        bridgeX,
+        bridgeY,
+        apexY,
         toX,
         toY,
         toSide,
@@ -502,18 +544,20 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         startOp,
         endOp,
         bridgeTag,
+        bridgeStartSym,
+        bridgeEndSym,
       });
 
-      const t1 = window.setTimeout(() => setFlyingMidFlipped(true), 175);
+      const t1 = window.setTimeout(() => setFlyingMidFlipped(true), 330);
       const t2 = window.setTimeout(() => {
         setFlyingAnim(null);
         setFlyingMidFlipped(false);
         setLandingSide(toSide);
-      }, 420);
+      }, 740);
       const t3 = window.setTimeout(() => {
         setBridgeFlash(null);
         setLandingSide(null);
-      }, 760);
+      }, 1150);
       flyTimerRef.current = [t1, t2, t3];
     },
     [clearFlyTimers, pureSymbolsMode, visualStyle]
@@ -529,6 +573,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       // Helper for Bab 3 Freeze-Penalty wrong move (-30s, max 4 mistakes)
       const applyFreezePenalty = (reasonText: string) => {
         if (!level.boss) return;
+        hadMistakeRef.current = true;
         sound.playNudge();
         sound.playBossTaunt();
         flashKiboMood('oops', 2000);
@@ -536,6 +581,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         const nextTime = Math.max(0, bossTimeLeft - bossPenaltySec);
         setBossMistakes(nextMistakes);
         setBossTimeLeft(nextTime);
+        setPenaltyFlashText(`−${bossPenaltySec} dtk!`);
         setTimePenaltyFlash(true);
         if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
         timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
@@ -564,7 +610,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       };
 
       if (!result.ok || !result.nextState) {
-        if (isTimeFrozen && level.boss) {
+        hadMistakeRef.current = true;
+        if (hasMistakeRule && level.boss) {
           applyFreezePenalty(level.boss.kiboLines.gimmickAlert);
           return;
         }
@@ -577,8 +624,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         return;
       }
 
-      // Bab 3 Freeze-Penalty: catch wrong/counterproductive transpose or flip moves!
-      if (isTimeFrozen && level.boss && (moveKind === 'transpose' || moveKind === 'flip')) {
+      // Bab 3 Freeze-Penalty: catch wrong/counterproductive transpose or flip moves (both asleep & awake!)
+      if (hasMistakeRule && level.boss && (moveKind === 'transpose' || moveKind === 'flip')) {
         const beforeDist = computeEquationComplexity(eqState);
         const afterDist = computeEquationComplexity(result.nextState);
         if (afterDist >= beforeDist) {
@@ -587,8 +634,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         }
       }
 
-      if (moveKind === 'transpose' && flyMeta) {
-        triggerFlyAnimation(flyMeta.term, flyMeta.fromSide, flyMeta.dragKind, flyMeta.originPoint);
+      if (moveKind === 'transpose') {
+        transposesRunRef.current += 1;
+        if (flyMeta) {
+          triggerFlyAnimation(flyMeta.term, flyMeta.fromSide, flyMeta.dragKind);
+        }
       }
 
       if (tutorialIndex !== null) {
@@ -667,8 +717,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 ? Math.max(1, 3 - nextPhaseIdx)
                 : totalPhases - nextPhaseIdx;
             const willEnterSpeedOrCosmic =
-              nextHpAfterHit === 1 &&
-              (bossGimmick === 'speed_enrage' || bossGimmick === 'cosmic_many_hp');
+              (bossGimmick === 'speed_enrage' && nextHpAfterHit === 1) ||
+              (bossGimmick === 'cosmic_many_hp' && nextHpAfterHit === 5);
 
             const hitLine = willEnterSpeedOrCosmic && level.boss.enrageGimmickLine
               ? level.boss.enrageGimmickLine
@@ -682,17 +732,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               }
               setBossDialogue(hitLine);
 
-              if (!isTimeFrozen) {
-                setBossTimeLeft((prev) => Math.min(totalBossTime, prev + 15));
-                setTimeBonusFlash(true);
-                if (timeBonusTimerRef.current) window.clearTimeout(timeBonusTimerRef.current);
-                timeBonusTimerRef.current = window.setTimeout(() => setTimeBonusFlash(false), 1150);
-              }
-
               setFeedback({
                 text: willEnterSpeedOrCosmic
                   ? level.boss!.kiboLines.gimmickAlert
-                  : `${level.boss!.kiboLines.hitCheer}${isTimeFrozen ? '' : ' (+15 dtk bonus!)'}`,
+                  : level.boss!.kiboLines.hitCheer,
                 tone: willEnterSpeedOrCosmic ? 'warn' : 'good',
               });
             }, 240);
@@ -774,7 +817,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             setBossHitAnim(false);
             setBossStrikeAnim(false);
             setSolvedInfo({ displayResult: check.displayResult as string, stars });
-            onComplete(level, newTotalMoves, stars);
+            onComplete(level, newTotalMoves, stars, {
+              flawless: !hadMistakeRef.current,
+              usedHint: usedHintRef.current,
+              transposes: transposesRunRef.current,
+            });
           }, 760);
           return;
         }
@@ -785,7 +832,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         window.setTimeout(() => {
           sound.playVictory();
           setSolvedInfo({ displayResult: check.displayResult as string, stars });
-          onComplete(level, newTotalMoves, stars);
+          onComplete(level, newTotalMoves, stars, {
+            flawless: !hadMistakeRef.current,
+            usedHint: usedHintRef.current,
+            transposes: transposesRunRef.current,
+          });
         }, 320);
       }
     },
@@ -803,7 +854,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       bossTimeLeft,
       maxBossMistakes,
       bossPenaltySec,
-      isTimeFrozen,
+      hasMistakeRule,
       totalBossTime,
       triggerFlyAnimation,
       tutorialIndex,
@@ -1032,6 +1083,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
+    hadMistakeRef.current = true;
     sound.playPickup();
     const prev = undoStack[undoStack.length - 1];
     setUndoStack((s) => s.slice(0, -1));
@@ -1044,6 +1096,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const handleReset = () => {
     sound.playPickup();
+    onRetryStage?.(level);
+    hadMistakeRef.current = false;
+    usedHintRef.current = false;
+    transposesRunRef.current = 0;
     const fresh = cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial);
     setBossPhaseIndex(0);
     setBossHitAnim(false);
@@ -1053,10 +1109,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setBossDialogue(level.boss?.introLine ?? '');
     setBossTimeLeft(totalBossTime);
     setBossMistakes(0);
+    setBossAwake(!(isBossLevel && level.boss?.gimmick === 'freeze_penalty'));
     setBossTimedOut(false);
     setBossDefeatReason('timeout');
     setTimeBonusFlash(false);
     setTimePenaltyFlash(false);
+    setPenaltyFlashText('');
     bossTauntIdxRef.current = 0;
     setEqState(fresh);
     setUndoStack([]);
@@ -1076,6 +1134,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   const handleHint = () => {
+    usedHintRef.current = true;
     const hint = getSmartHint(eqState, pureSymbolsMode);
     sound.playPickup();
     flashKiboMood('thinking', 2500);
@@ -1084,7 +1143,63 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   const handleBossTaunt = () => {
-    const lines = level.boss?.tauntLines;
+    if (!level.boss || solvedInfo || bossTimedOut) return;
+
+    // Bab 3 Kura Meriam: starts sleeping (time frozen); interacting wakes him up & starts the timer!
+    if (bossGimmick === 'freeze_penalty' && !bossAwake) {
+      setBossAwake(true);
+      flashKiboMood('oops', 2400);
+      setBossDialogue(
+        'HEY! Kamu bangunin tidur siangku?! Sekarang jamnya kujalankan, tapi aturan salah 4× (−30 dtk) tetap berlaku ya!'
+      );
+      setFeedback({
+        text: 'YAH! Kura Meriam terbangun gara-gara disentuh! Waktunya sekarang berjalan, dan aturan salah 4× tetap aktif!',
+        tone: 'warn',
+      });
+      return;
+    }
+
+    // Bab 5 Cthulhu Samudra: interacting with him deducts 5 seconds immediately!
+    if (bossGimmick === 'cosmic_many_hp') {
+      const nextTime = Math.max(0, bossTimeLeft - 5);
+      setBossTimeLeft(nextTime);
+      setPenaltyFlashText('−5 dtk!');
+      setTimePenaltyFlash(true);
+      if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
+      timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
+      flashKiboMood('oops', 2000);
+
+      const lines = level.boss.tauntLines;
+      const line =
+        lines && lines.length > 0
+          ? lines[bossTauntIdxRef.current % lines.length]
+          : 'BERANINYA MENYENTUHKU?! KUPOTONG 5 DETIK WAKTUMU!';
+      bossTauntIdxRef.current += 1;
+
+      if (nextTime <= 0) {
+        phonkMusic.stop();
+        setBossDefeatReason('timeout');
+        setBossTimedOut(true);
+        setBossDialogue(level.boss.timeoutLine);
+        setSelected(null);
+        setActiveDrag(null);
+        pendingRef.current = null;
+        setFeedback({
+          text: 'ADUH! Menyentuh Cthulhu memotong 5 detik terakhir dan waktumu habis!',
+          tone: 'warn',
+        });
+        return;
+      }
+
+      setBossDialogue(line);
+      setFeedback({
+        text: 'AWAS! Jangan sentuh Cthulhu — waktumu langsung terpotong 5 detik (−5 dtk)!',
+        tone: 'warn',
+      });
+      return;
+    }
+
+    const lines = level.boss.tauntLines;
     if (!lines || lines.length === 0) return;
     const line = lines[bossTauntIdxRef.current % lines.length];
     bossTauntIdxRef.current += 1;
@@ -1333,16 +1448,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               isHit={bossHitAnim}
               isHealAnim={bossHealAnim}
               isSpeedUp={isSpeedUp}
+              timeSpeedMultiplier={timeSpeedMultiplier}
               isTimeFrozen={isTimeFrozen}
+              isBossSleeping={isBossSleeping}
               cosmicMode={cosmicMode}
               mistakesUsed={bossMistakes}
-              maxMistakes={isTimeFrozen ? maxBossMistakes : 0}
+              maxMistakes={hasMistakeRule ? maxBossMistakes : 0}
               dialogue={bossDialogue}
               phonkActive={phonkActive}
               timeLeftSeconds={bossTimeLeft}
               totalTimeSeconds={totalBossTime}
               timeBonusFlash={timeBonusFlash}
               timePenaltyFlash={timePenaltyFlash}
+              penaltyFlashText={penaltyFlashText}
               onBossTaunt={handleBossTaunt}
             />
           )}
@@ -1352,6 +1470,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             <KiboTutorialCard
               steps={level.tutorialSteps}
               currentIndex={tutorialIndex}
+              chapterId={level.chapterId}
               onNext={() => {
                 sound.playPickup();
                 if (tutorialIndex + 1 < level.tutorialSteps!.length) {
@@ -1398,9 +1517,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             >
               <KiboAvatar
                 size="sm"
+                chapterId={level.chapterId}
                 mood={kiboMood}
                 interactive
                 customQuips={isBossLevel ? level.boss?.kiboLines.tapLines : undefined}
+                onFaintChange={(fainted) => {
+                  if (fainted) {
+                    setFeedback({
+                      text: 'Uuu... Kibo sampai pingsan nungguin kamu lebih dari 1 menit! Sentuh layar biar Kibo bangun ya!',
+                      tone: 'warn',
+                    });
+                  } else {
+                    setFeedback({
+                      text: 'Hwaaah! Kibo sudah bangun lagi! Ayo lanjutkan pindah ruasnya!',
+                      tone: 'good',
+                    });
+                  }
+                }}
                 onInteract={(quip) => {
                   flashKiboMood('giggle', 1300);
                   setFeedback({ text: quip, tone: 'good' });
@@ -1551,6 +1684,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                         <div className="pointer-events-none absolute inset-0 -m-2 rounded-2xl border-2 border-[#FEF08A] animate-shockwave" />
                       )}
                       <div
+                        ref={bridgeRef}
                         style={{
                           transform: `rotate(${beamTilt}deg) scale(${isCrossingPortal ? 1.14 : 1})`,
                         }}
@@ -1884,63 +2018,165 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         </aside>
       </main>
 
-      {/* 3D-FLIPPING PARABOLIC FLYING CARD TRANSPOSITION OVERLAY */}
+      {/* 3D-FLIPPING PARABOLIC FLYING CARD + VISIBLE GOLDEN ARC ACROSS '=' OVERLAY */}
       <AnimatePresence>
         {flyingAnim && (
-          <motion.div
-            key={flyingAnim.id}
-            initial={{
-              x: flyingAnim.fromX,
-              y: flyingAnim.fromY,
-              scale: 1,
-              rotate: 0,
-              rotateY: 0,
-              opacity: 1,
-            }}
-            animate={{
-              x: [
-                flyingAnim.fromX,
-                (flyingAnim.fromX + flyingAnim.toX) / 2,
-                flyingAnim.toX,
-              ],
-              y: [
-                flyingAnim.fromY,
-                Math.min(flyingAnim.fromY, flyingAnim.toY) - 82,
-                flyingAnim.toY,
-              ],
-              scale: [1, 1.18, 0.96],
-              rotate: [0, flyingAnim.toX > flyingAnim.fromX ? 12 : -12, 0],
-              rotateY: [0, 90, 0],
-              opacity: [1, 1, 0.35],
-            }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
-            style={{ perspective: 900 }}
-            className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2"
-          >
-            {flyingAnim.dragKind === 'coeff' || flyingAnim.dragKind === 'denom' ? (
-              flyingAnim.startOp &&
-              flyingAnim.endOp && (
-                <OperatorCardFace
-                  opSymbol={flyingMidFlipped ? flyingAnim.endOp.opSymbol : flyingAnim.startOp.opSymbol}
-                  valueLabel={
-                    flyingMidFlipped ? flyingAnim.endOp.valueLabel : flyingAnim.startOp.valueLabel
-                  }
-                  tone={flyingMidFlipped ? flyingAnim.endOp.tone : flyingAnim.startOp.tone}
-                  glowGold
-                />
-              )
-            ) : (
-              flyingAnim.startTerm &&
-              flyingAnim.endTerm && (
-                <TileCardFace
-                  term={flyingMidFlipped ? flyingAnim.endTerm : flyingAnim.startTerm}
-                  visualStyle={flyingAnim.visualStyle}
-                  glowGold
-                />
-              )
-            )}
-          </motion.div>
+          <React.Fragment key={flyingAnim.id}>
+            {/* Glowing Golden Parabolic Dashed Trajectory Arc Over '=' */}
+            <svg
+              className="fixed inset-0 z-40 pointer-events-none w-screen h-screen overflow-visible"
+              aria-hidden="true"
+            >
+              <defs>
+                <marker
+                  id={`fly-arrow-${flyingAnim.id}`}
+                  viewBox="0 0 12 12"
+                  refX="8"
+                  refY="6"
+                  markerWidth="7"
+                  markerHeight="7"
+                  orient="auto"
+                >
+                  <path d="M 0 1 L 11 6 L 0 11 z" fill="#F59E0B" />
+                </marker>
+              </defs>
+
+              {(() => {
+                // Quadratic Bezier control point so the curve passes through (bridgeX, apexY) at t=0.5
+                const ctrlX = 2 * flyingAnim.bridgeX - 0.5 * (flyingAnim.fromX + flyingAnim.toX);
+                const ctrlY = 2 * flyingAnim.apexY - 0.5 * (flyingAnim.fromY + flyingAnim.toY);
+                const arcD = `M ${flyingAnim.fromX} ${flyingAnim.fromY} Q ${ctrlX} ${ctrlY} ${flyingAnim.toX} ${flyingAnim.toY}`;
+                return (
+                  <>
+                    {/* Soft golden halo */}
+                    <motion.path
+                      d={arcD}
+                      fill="none"
+                      stroke="#FDE047"
+                      strokeWidth="12"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0, opacity: 0.45 }}
+                      animate={{ pathLength: 1, opacity: [0.45, 0.35, 0] }}
+                      transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                    {/* Crisp dashed flight path with arrowhead */}
+                    <motion.path
+                      d={arcD}
+                      fill="none"
+                      stroke="#F59E0B"
+                      strokeWidth="4"
+                      strokeDasharray="10 8"
+                      strokeLinecap="round"
+                      markerEnd={`url(#fly-arrow-${flyingAnim.id})`}
+                      initial={{ pathLength: 0, opacity: 0.95 }}
+                      animate={{ pathLength: 1, opacity: [0.95, 0.95, 0] }}
+                      transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+                    />
+                    {/* Origin takeoff pulse ring */}
+                    <motion.circle
+                      cx={flyingAnim.fromX}
+                      cy={flyingAnim.fromY}
+                      r="12"
+                      fill="none"
+                      stroke="#38BDF8"
+                      strokeWidth="3"
+                      initial={{ scale: 0.6, opacity: 0.9 }}
+                      animate={{ scale: 2.2, opacity: 0 }}
+                      transition={{ duration: 0.45, ease: 'easeOut' }}
+                    />
+                    {/* Mid-air sign-flip burst directly over '=' */}
+                    <motion.circle
+                      cx={flyingAnim.bridgeX}
+                      cy={flyingAnim.apexY}
+                      r="18"
+                      fill="#FEF08A"
+                      initial={{ scale: 0.2, opacity: 0 }}
+                      animate={{ scale: [0.2, 1.9, 2.4], opacity: [0, 0.65, 0] }}
+                      transition={{ duration: 0.55, delay: 0.22, ease: 'easeOut' }}
+                    />
+                  </>
+                );
+              })()}
+            </svg>
+
+            {/* Mid-Air Transformation Callout Directly Above '=' */}
+            <motion.div
+              initial={{
+                x: flyingAnim.bridgeX,
+                y: flyingAnim.apexY - 46,
+                scale: 0.72,
+                opacity: 0,
+              }}
+              animate={{
+                x: flyingAnim.bridgeX,
+                y: flyingAnim.apexY - 58,
+                scale: flyingMidFlipped ? 1.12 : 0.96,
+                opacity: [0, 1, 1, 0],
+              }}
+              transition={{ duration: 0.74, times: [0, 0.22, 0.82, 1] }}
+              className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-xl bg-[#0D354C]/95 text-[#FEF08A] border-2 border-[#FBBF24] px-3 py-1.5 shadow-xl flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#FDE047] shrink-0" aria-hidden="true" />
+              {flyingAnim.bridgeStartSym && flyingAnim.bridgeEndSym ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <InlineTermChip term={flyingAnim.bridgeStartSym} pureSymbols size="xs" />
+                  <span className="font-extrabold text-[#FDE047]">→</span>
+                  <InlineTermChip term={flyingAnim.bridgeEndSym} pureSymbols size="xs" />
+                </span>
+              ) : (
+                <span className="font-mono font-extrabold text-xs sm:text-sm tracking-tight">
+                  {flyingAnim.bridgeTag}
+                </span>
+              )}
+            </motion.div>
+
+            {/* Flying Square Card Vaulting Across '=' With 3D Sign Flip */}
+            <motion.div
+              initial={{
+                x: flyingAnim.fromX,
+                y: flyingAnim.fromY,
+                scale: 1,
+                rotate: 0,
+                rotateY: 0,
+                opacity: 1,
+              }}
+              animate={{
+                x: [flyingAnim.fromX, flyingAnim.bridgeX, flyingAnim.toX],
+                y: [flyingAnim.fromY, flyingAnim.apexY, flyingAnim.toY],
+                scale: [1, 1.24, 0.98],
+                rotate: [0, flyingAnim.toX > flyingAnim.fromX ? 14 : -14, 0],
+                rotateY: [0, 90, 0],
+                opacity: [1, 1, 0.92],
+              }}
+              exit={{ opacity: 0, scale: 0.85 }}
+              transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+              style={{ perspective: 1000 }}
+              className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_12px_24px_rgba(245,158,11,0.48)]"
+            >
+              {flyingAnim.dragKind === 'coeff' || flyingAnim.dragKind === 'denom' ? (
+                flyingAnim.startOp &&
+                flyingAnim.endOp && (
+                  <OperatorCardFace
+                    opSymbol={flyingMidFlipped ? flyingAnim.endOp.opSymbol : flyingAnim.startOp.opSymbol}
+                    valueLabel={
+                      flyingMidFlipped ? flyingAnim.endOp.valueLabel : flyingAnim.startOp.valueLabel
+                    }
+                    tone={flyingMidFlipped ? flyingAnim.endOp.tone : flyingAnim.startOp.tone}
+                    glowGold
+                  />
+                )
+              ) : (
+                flyingAnim.startTerm &&
+                flyingAnim.endTerm && (
+                  <TileCardFace
+                    term={flyingMidFlipped ? flyingAnim.endTerm : flyingAnim.startTerm}
+                    visualStyle={flyingAnim.visualStyle}
+                    glowGold
+                  />
+                )
+              )}
+            </motion.div>
+          </React.Fragment>
         )}
       </AnimatePresence>
 
@@ -2017,7 +2253,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           <div className="w-full max-w-md rounded-3xl game-panel border-3 border-[#38BDF8] p-6 sm:p-7 text-center animate-pop-in shadow-2xl">
             <div className="flex flex-col items-center">
               <div className="mb-3">
-                <KiboAvatar size="lg" mood="excited" />
+                <KiboAvatar size="lg" chapterId={level.chapterId} mood="excited" />
               </div>
 
               <div className="flex items-center gap-2 mb-2" aria-label={`${solvedInfo.stars} dari 3 bintang`}>
