@@ -303,9 +303,23 @@ export const KiboTutorialCard: React.FC<KiboTutorialCardProps> = ({
           <h3 className="mt-0.5 font-display font-extrabold text-base text-[#0D354C]">
             {step.title}
           </h3>
-          <p className="mt-1 text-sm text-[#24536B] leading-relaxed">
-            {tapQuip ? tapQuip : step.message}
-          </p>
+          {(() => {
+            const bubbleMsg = tapQuip ? tapQuip : step.message;
+            return (
+              <div
+                key={bubbleMsg}
+                className="relative mt-2 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3.5 py-2 shadow-sm speech-bubble-pop"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute -left-2 top-3.5 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                />
+                <p className="relative z-10 text-xs sm:text-sm font-medium text-[#0D354C] leading-relaxed">
+                  “{bubbleMsg}”
+                </p>
+              </div>
+            );
+          })()}
 
           <div className="mt-3 flex items-center justify-end gap-2">
             <button
@@ -684,11 +698,11 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = React.memo(({
 
         <div
           key={dialogue}
-          className="relative mt-2 ml-1.5 rounded-2xl bg-white/14 border border-white/30 px-3 py-1.5 text-xs sm:text-sm text-[#F0F9FF] leading-snug shadow-sm speech-bubble-pop"
+          className="relative mt-2 ml-1.5 rounded-2xl bg-[#0B2942]/82 border border-white/40 px-3 py-1.5 text-xs sm:text-sm text-[#F0F9FF] leading-snug shadow-sm speech-bubble-pop"
         >
           <span
             aria-hidden="true"
-            className="absolute -left-1.5 top-3 w-3 h-3 rotate-45 bg-[#334155]/85 border-l border-b border-white/30"
+            className="absolute -left-1.5 top-3 w-3 h-3 rotate-45 bg-[#0B2942]/92 border-l border-b border-white/40"
           />
           <p className="relative z-10 font-medium">“{dialogue}”</p>
         </div>
@@ -743,6 +757,7 @@ interface KiboBossCelebrationProps {
   resultNode?: React.ReactNode;
   hasNextLevel: boolean;
   onNextLevel: () => void;
+  onTriggerOutro?: () => void;
   onReplay: () => void;
   onExit: () => void;
 }
@@ -756,6 +771,7 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
   resultNode,
   hasNextLevel,
   onNextLevel,
+  onTriggerOutro,
   onReplay,
   onExit,
 }) => {
@@ -899,15 +915,22 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
           ))}
         </div>
 
-        {/* Kibo Positive Reinforcement Speech (Unique Per Boss!) */}
-        <div className="mt-3 rounded-2xl bg-[#EBF8FF] border border-[#BAE6FD] px-4 py-3 text-sm text-[#1E4E68] leading-snug">
+        {/* Kibo Positive Reinforcement Speech Bubble (Unique Per Boss!) */}
+        <div
+          key={highFived ? 'post-tos' : 'pre-tos'}
+          className="relative mt-4 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-4 py-3 text-sm text-[#0D354C] leading-snug shadow-sm speech-bubble-pop"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-[#EBF8FF] border-l-2 border-t-2 border-[#7DD3FC]"
+          />
           {highFived ? (
-            <div className="flex flex-col items-center gap-2">
-              <span>
+            <div className="relative z-10 flex flex-col items-center gap-2">
+              <span className="font-medium">
                 <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.victoryPostTos}”
               </span>
               {resultNode ? (
-                <div className="inline-flex items-center justify-center rounded-xl bg-white/85 border border-[#BAE6FD] px-3 py-1.5">
+                <div className="inline-flex items-center justify-center rounded-xl bg-white/90 border border-[#BAE6FD] px-3 py-1.5">
                   {resultNode}
                 </div>
               ) : (
@@ -915,7 +938,7 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
               )}
             </div>
           ) : (
-            <span>
+            <span className="relative z-10 font-medium">
               <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.victoryPreTos}”
             </span>
           )}
@@ -932,7 +955,16 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
             <span>Ulangi</span>
           </button>
 
-          {hasNextLevel ? (
+          {chapterId === 5 && onTriggerOutro ? (
+            <button
+              type="button"
+              onClick={onTriggerOutro}
+              className="game-btn-gold flex-1 inline-flex items-center justify-center gap-1.5 min-h-[48px] px-5 rounded-xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
+            >
+              <Crown className="w-4 h-4" aria-hidden="true" />
+              <span>Tonton Outro Bab 5!</span>
+            </button>
+          ) : hasNextLevel ? (
             <button
               type="button"
               onClick={onNextLevel}
@@ -990,9 +1022,7 @@ export const BossDefeatModal: React.FC<BossDefeatModalProps> = ({
       >
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFE4E6] border border-[#FDA4AF] text-xs font-extrabold text-[#BE123C]">
           <Clock className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>
-            {reason === 'mistakes' ? '4× SALAH PINDAH · WAKTU HABIS!' : 'WAKTU HABIS · KALAH!'}
-          </span>
+          <span>{reason === 'mistakes' ? 'WAKTU HABIS TERPOTONG!' : 'WAKTU HABIS · KALAH!'}</span>
         </div>
 
         <h2
@@ -1012,20 +1042,30 @@ export const BossDefeatModal: React.FC<BossDefeatModalProps> = ({
           />
         </div>
 
-        {/* Boss Mocking Speech */}
-        <div className="mt-4 rounded-2xl bg-[#FFF1F2] border-2 border-[#FDA4AF] px-4 py-3 text-sm text-[#881337] leading-snug">
-          <span className="block text-[11px] font-extrabold uppercase tracking-wide text-[#BE123C] mb-0.5">
+        {/* Boss Mocking Speech Bubble */}
+        <div className="relative mt-4 rounded-2xl bg-[#FFF1F2] border-2 border-[#FDA4AF] px-4 py-3 text-sm text-[#881337] leading-snug shadow-sm speech-bubble-pop">
+          <span
+            aria-hidden="true"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-[#FFF1F2] border-l-2 border-t-2 border-[#FDA4AF]"
+          />
+          <span className="relative z-10 block text-[11px] font-extrabold uppercase tracking-wide text-[#BE123C] mb-0.5">
             {boss.name}
           </span>
-          <p className="font-semibold">“{boss.timeoutLine}”</p>
+          <p className="relative z-10 font-semibold">“{boss.timeoutLine}”</p>
         </div>
 
-        {/* Kibo Encouraging the Player (Unique Per Boss!) */}
-        <div className="mt-3 rounded-2xl bg-[#EBF8FF] border border-[#BAE6FD] px-3.5 py-2.5 flex items-center gap-3 text-left">
-          <AnimatedKibo size="sm" mood="oops" interactive={false} />
-          <p className="text-xs sm:text-sm text-[#1E4E68] leading-snug">
-            <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.defeatEncourage}”
-          </p>
+        {/* Kibo Encouraging Speech Bubble (Unique Per Boss!) */}
+        <div className="mt-3 flex items-center gap-3 text-left">
+          <AnimatedKibo size="sm" mood="oops" interactive={false} className="shrink-0" />
+          <div className="relative flex-1 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3.5 py-2.5 shadow-sm speech-bubble-pop">
+            <span
+              aria-hidden="true"
+              className="absolute -left-2 top-3.5 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+            />
+            <p className="relative z-10 text-xs sm:text-sm font-medium text-[#0D354C] leading-snug">
+              <strong className="text-[#0284C7]">Kibo:</strong> “{boss.kiboLines.defeatEncourage}”
+            </p>
+          </div>
         </div>
 
         <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
@@ -1098,9 +1138,15 @@ export const KiboAfkDefeatModal: React.FC<KiboAfkDefeatModalProps> = ({
           />
         </div>
 
-        <div className="mt-4 rounded-2xl bg-[#FFF1F2] border-2 border-[#FDA4AF] px-4 py-3 text-sm text-[#881337] leading-snug">
-          <strong className="text-[#BE123C]">Kibo:</strong> “Uuu... pusing... kamu diam lebih dari 1
-          menit sampai Kibo pingsan kehabisan tenaga di papan! Ayo coba ulangi stagenya ya!”
+        <div className="relative mt-4 rounded-2xl bg-[#FFF1F2] border-2 border-[#FDA4AF] px-4 py-3 text-sm text-[#881337] leading-snug shadow-sm speech-bubble-pop">
+          <span
+            aria-hidden="true"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-[#FFF1F2] border-l-2 border-t-2 border-[#FDA4AF]"
+          />
+          <p className="relative z-10 font-medium">
+            <strong className="text-[#BE123C]">Kibo:</strong> “Uuu... pusing... kamu diam lebih dari
+            1 menit sampai Kibo pingsan kehabisan tenaga di papan! Ayo coba ulangi stagenya ya!”
+          </p>
         </div>
 
         <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
@@ -1245,11 +1291,15 @@ export const KiboSpecialEndingModal: React.FC<KiboSpecialEndingModalProps> = ({
           </button>
         </div>
 
-        <div className="mt-4 rounded-2xl bg-gradient-to-br from-[#F3E8FF] via-[#FFFDF5] to-[#E0F2FE] border-2 border-[#D8B4FE] px-4 py-3.5 text-left shadow-sm">
-          <div className="text-xs font-extrabold text-[#7E22CE] mb-1">
+        <div className="relative mt-4 rounded-2xl bg-gradient-to-br from-[#F3E8FF] via-[#FFFDF5] to-[#E0F2FE] border-2 border-[#D8B4FE] px-4 py-3.5 text-left shadow-sm speech-bubble-pop">
+          <span
+            aria-hidden="true"
+            className="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-[#F3E8FF] border-l-2 border-t-2 border-[#D8B4FE]"
+          />
+          <div className="relative z-10 text-xs font-extrabold text-[#7E22CE] mb-1">
             Pesan Hati Kibo si Hiu Gemoy:
           </div>
-          <p className="text-xs sm:text-sm text-[#1E4E68] leading-relaxed font-medium">
+          <p className="relative z-10 text-xs sm:text-sm text-[#1E4E68] leading-relaxed font-medium">
             “Selama 7 hari penuh tanpa putus, kamu selalu datang menemani Kibo berlatih pindah ruas
             di Pantai Setara! Ombak pantai, bintang laut, dan seluruh pulau kini bersinar lebih
             terang berkat ketekunanmu. Kamu bukan cuma jago aljabar — kamu sahabat terbaik Kibo

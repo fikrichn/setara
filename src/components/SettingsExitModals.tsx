@@ -1,5 +1,5 @@
 import React from 'react';
-import { Film, Home, LogOut, Music, Play, Settings, Volume2, X } from 'lucide-react';
+import { Compass, Film, Home, LogOut, Music, Play, Settings, Volume2, X } from 'lucide-react';
 import { sound } from '../game/sound';
 
 interface SettingsModalProps {
@@ -11,6 +11,7 @@ interface SettingsModalProps {
   onChangeSfxVolume: (val: number) => void;
   onReturnToMenu: () => void;
   onReplayIntro?: () => void;
+  onReplayTour?: () => void;
   onRequestExit: () => void;
   onClose: () => void;
 }
@@ -24,6 +25,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeSfxVolume,
   onReturnToMenu,
   onReplayIntro,
+  onReplayTour,
   onRequestExit,
   onClose,
 }) => {
@@ -156,6 +158,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               <Film className="w-4 h-4 shrink-0 text-[#0284C7]" aria-hidden="true" />
               <span>Putar Intro Kibo</span>
+            </button>
+          )}
+
+          {onReplayTour && (
+            <button
+              type="button"
+              onClick={() => {
+                sound.playPickup();
+                onReplayTour();
+              }}
+              className="game-btn-wood w-full min-h-[46px] px-4 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+            >
+              <Compass className="w-4 h-4 shrink-0 text-[#0D9488]" aria-hidden="true" />
+              <span>Putar Tur Panduan</span>
             </button>
           )}
 

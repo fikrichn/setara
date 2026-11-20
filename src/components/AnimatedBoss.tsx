@@ -1205,3 +1205,227 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = React.memo(({
 });
 
 AnimatedBoss.displayName = 'AnimatedBoss';
+
+// =========================================================================
+// BAB 6 COMING SOON: SILUET BOS MISTERIUS MIRIP KIBO!
+// =========================================================================
+
+interface KiboSilhouetteBossProps {
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  interactive?: boolean;
+  onTap?: () => void;
+  className?: string;
+}
+
+export const KiboSilhouetteBoss: React.FC<KiboSilhouetteBossProps> = React.memo(({
+  size = 'xl',
+  interactive = true,
+  onTap,
+  className = '',
+}) => {
+  const uid = useId().replace(/:/g, '');
+  const [pulseCount, setPulseCount] = useState(0);
+  const [glintText, setGlintText] = useState<string | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const handleClick = () => {
+    if (!interactive) return;
+    sound.playBossTaunt();
+    setPulseCount((c) => c + 1);
+    const words = ['???', 'Hiu Bayangan...', 'Segera Hadir!', 'Bab 6!'];
+    setGlintText(words[pulseCount % words.length]);
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setGlintText(null), 1150);
+    onTap?.();
+  };
+
+  const renderSvg = () => (
+    <svg viewBox="0 0 120 120" className="w-full h-full select-none" aria-hidden="true">
+      <defs>
+        <radialGradient id={`silBg-${uid}`} cx="50%" cy="42%" r="68%">
+          <stop offset="0%" stopColor="#1E293B" />
+          <stop offset="65%" stopColor="#0F172A" />
+          <stop offset="100%" stopColor="#020617" />
+        </radialGradient>
+        <linearGradient id={`silBody-${uid}`} x1="15%" y1="10%" x2="85%" y2="95%">
+          <stop offset="0%" stopColor="#1E293B" />
+          <stop offset="55%" stopColor="#090D16" />
+          <stop offset="100%" stopColor="#020617" />
+        </linearGradient>
+      </defs>
+
+      <rect x="0" y="0" width="120" height="120" rx="22" fill={`url(#silBg-${uid})`} />
+
+      {/* Mysterious Nebula Vortex Rings */}
+      <circle
+        cx="60"
+        cy="60"
+        r="49"
+        fill="none"
+        stroke="#22D3EE"
+        strokeWidth="2"
+        strokeDasharray="7 7"
+        opacity="0.55"
+        className="anime-gear-cw"
+      />
+      <circle
+        cx="60"
+        cy="60"
+        r="41"
+        fill="none"
+        stroke="#A855F7"
+        strokeWidth="1.6"
+        strokeDasharray="4 8"
+        opacity="0.45"
+        className="anime-gear-ccw"
+      />
+
+      <ellipse cx="59" cy="108" rx="30" ry="5" fill="#000000" opacity="0.55" />
+
+      <g className="anime-kibo-breathe">
+        {/* Shark Tail Fin Silhouette */}
+        <g className="anime-kibo-tail">
+          <path
+            d="M 84 74 C 98 69, 108 56, 113 49 C 110 63, 106 72, 102 77 C 107 82, 111 89, 112 96 C 103 91, 94 85, 83 82 Z"
+            fill={`url(#silBody-${uid})`}
+            stroke="#38BDF8"
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+            opacity="0.96"
+          />
+        </g>
+
+        {/* Feet Silhouette */}
+        <path
+          d="M 41 90 C 37 97, 36 105, 45 106 C 53 106, 54 98, 52 90 Z"
+          fill="#060A14"
+          stroke="#22D3EE"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M 67 90 C 65 98, 66 106, 74 106 C 83 105, 82 97, 78 90 Z"
+          fill="#060A14"
+          stroke="#22D3EE"
+          strokeWidth="1.4"
+        />
+
+        {/* Sharp Rival Dorsal Fin Silhouette (like Kibo's!) */}
+        <path
+          d="M 50 28 C 52 10, 69 7, 77 19 C 72 22, 68 27, 67 32 Z"
+          fill={`url(#silBody-${uid})`}
+          stroke="#22D3EE"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+
+        {/* Trailing Mystery Headband / Cape Tails */}
+        <path
+          d="M 30 43 C 16 37, 10 42, 13 48 C 19 46, 24 47, 29 50 Z"
+          fill="#0F172A"
+          stroke="#A855F7"
+          strokeWidth="1.6"
+        />
+        <path
+          d="M 88 45 C 101 40, 108 45, 105 51 C 99 49, 94 50, 89 52 Z"
+          fill="#0F172A"
+          stroke="#A855F7"
+          strokeWidth="1.6"
+        />
+
+        {/* Kibo-shaped Round Shark Silhouette Body */}
+        <path
+          d="M 25 65 C 24 38, 41 25, 59 25 C 79 25, 93 40, 92 66 C 91 86, 78 96, 59 96 C 39 96, 26 86, 25 65 Z"
+          fill={`url(#silBody-${uid})`}
+          stroke="#38BDF8"
+          strokeWidth="2.4"
+        />
+
+        {/* Pectoral Fins */}
+        <path
+          d="M 27 64 C 14 66, 13 78, 22 81 C 27 81, 30 75, 31 70 Z"
+          fill="#060A14"
+          stroke="#38BDF8"
+          strokeWidth="1.6"
+        />
+        <path
+          d="M 90 64 C 103 66, 104 78, 95 81 C 90 81, 87 75, 86 70 Z"
+          fill="#060A14"
+          stroke="#38BDF8"
+          strokeWidth="1.6"
+        />
+
+        {/* Glowing Mysterious Rival Eyes */}
+        <g className="anime-eye-blink">
+          <path d="M 38 49 Q 46 53 52 51 Q 45 57 38 49 Z" fill="#22D3EE" />
+          <path d="M 79 49 Q 71 53 65 51 Q 72 57 79 49 Z" fill="#E879F9" />
+          <circle cx="44" cy="52" r="1.4" fill="#FFFFFF" />
+          <circle cx="73" cy="52" r="1.4" fill="#FFFFFF" />
+        </g>
+
+        {/* Faint Mysterious '?' Scarf Emblem */}
+        <circle
+          cx="59"
+          cy="77"
+          r="9"
+          fill="#0F172A"
+          stroke="#22D3EE"
+          strokeWidth="1.6"
+          strokeDasharray="3 2"
+        />
+        <text
+          x="59"
+          y="81.5"
+          textAnchor="middle"
+          fill="#67E8F9"
+          fontSize="12"
+          fontWeight="900"
+          fontFamily="sans-serif"
+        >
+          ?
+        </text>
+      </g>
+    </svg>
+  );
+
+  const frameClass = `relative overflow-visible shrink-0 ${SIZE_CLASSES[size]} animate-kibo-waddle ${className}`;
+  const innerCardClass = `relative w-full h-full overflow-hidden border-2 border-[#22D3EE]/80 shadow-[0_0_24px_rgba(34,211,238,0.45)] ${
+    size === 'sm' ? 'rounded-xl' : size === 'xl' ? 'rounded-3xl' : 'rounded-2xl'
+  }`;
+
+  if (!interactive) {
+    return (
+      <div className={frameClass} aria-hidden="true">
+        <div className={innerCardClass}>{renderSvg()}</div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleClick}
+      whileHover={{ scale: 1.06, rotate: 2 }}
+      whileTap={{ scale: 0.92 }}
+      aria-label="Siluet Bos Misterius Bab 6"
+      className={`${frameClass} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22D3EE]`}
+    >
+      <div key={pulseCount} className={`${innerCardClass} ${pulseCount > 0 ? 'animate-boss-tap' : ''}`}>
+        {renderSvg()}
+      </div>
+      {glintText && (
+        <span className="pointer-events-none absolute -top-3 -right-2 z-30 rounded-xl px-2 py-0.5 font-display font-extrabold text-[11px] shadow-lg border border-white/80 whitespace-nowrap animate-boss-comic bg-[#0F172A] text-[#67E8F9]">
+          {glintText}
+        </span>
+      )}
+    </motion.button>
+  );
+});
+
+KiboSilhouetteBoss.displayName = 'KiboSilhouetteBoss';
+

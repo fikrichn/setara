@@ -36,17 +36,62 @@ jobs:
             yes | "$SDK_BIN" --licenses > /dev/null 2>&1 || true
           fi
 
+      - name: Restore or create persistent Android signing keystore
+        id: keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: setara-android-signing-keystore-v1
+
+      - name: Ensure consistent APK signing certificate
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Using repository secret signing keystore..."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > ~/.android/debug.keystore
+          elif [ ! -f ~/.android/debug.keystore ]; then
+            echo "Generating persistent debug keystore (cached for all future updates)..."
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Setara Aljabar,O=Setara,C=ID"
+          else
+            echo "Restored persistent debug keystore from cache."
+          fi
+
       - name: Install dependencies & build web bundle
         run: |
           npm install --legacy-peer-deps
           npm run build
 
-      - name: Add Capacitor Android project
+      - name: Add Capacitor Android project & bump versionCode
+        env:
+          RUN_NUM: ${{ github.run_number }}
+          REF_NAME: ${{ github.ref }}
         run: |
           npm install --legacy-peer-deps @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/app@7
           rm -rf android
           npx cap add android
           npx cap sync android
+          node -e '
+            const fs = require("fs");
+            const file = "android/app/build.gradle";
+            let gradle = fs.readFileSync(file, "utf8");
+            const vCode = Math.max(2, Number(process.env.RUN_NUM || 2));
+            const ref = process.env.REF_NAME || "";
+            const vName = ref.startsWith("refs/tags/") ? ref.replace(/^refs\/tags\/v?/, "") : `1.0.${vCode}`;
+            gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${vCode}`);
+            gradle = gradle.replace(/versionName\s+"[^"]+"/, `versionName "${vName}"`);
+            fs.writeFileSync(file, gradle, "utf8");
+            console.log(`Updated Android build.gradle -> versionCode=${vCode}, versionName=${vName}`);
+          '
 
       - name: Compile Debug APK
         working-directory: android
@@ -80,8 +125,9 @@ jobs:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           name: Setara Android ${{ steps.release_meta.outputs.tag_name }}
           body: |
-            Build otomatis APK Android **Setara — Timbangan Pindah Ruas**.
+            Build otomatis APK Android **Setara — Timbangan Pindah Ruas** (`${{ steps.release_meta.outputs.tag_name }}`).
             Unduh file `${{ steps.release_meta.outputs.apk_file }}` di bawah ini untuk memasang di perangkat Android.
+            > **Catatan Pembaruan:** Mulai rilis ini tanda tangan APK & `versionCode` dibuat konsisten agar pembaruan berikutnya dapat langsung menimpa aplikasi lama tanpa menghapus game. Jika sebelumnya terpasang versi lama dengan tanda tangan acak, lakukan hapus pasang sekali saja pada pembaruan ini.
           generate_release_notes: true
           make_latest: true
           files: |

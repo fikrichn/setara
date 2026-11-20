@@ -145,12 +145,21 @@ export interface LevelProgress {
   speedster?: boolean;
 }
 
+export interface DailyHistoryPoint {
+  dateKey: string;
+  solved: number;
+  timeSpentSec: number;
+  streakDay: number;
+}
+
 export interface PlayerStats {
   flawlessStageIds: string[]; // Stage IDs completed with zero errors/mistakes/undo
   retryCount: number; // Total stage retries / replays
   totalTransposes: number; // Total pindah ruas across '='
   noHintBossWins: number; // Bosses defeated without using Bantuan
   speedsterCount: number; // Stages completed under Speed Run target time
+  totalTimeSpentSec?: number; // Total active play time in seconds
+  dailyHistory?: DailyHistoryPoint[]; // Rolling daily history for D3 progress charts
 }
 
 export interface DailyMissionProgress {
@@ -174,6 +183,8 @@ export interface ProgressStore {
   musicVolume: number; // 0.15 .. 1.0 (cannot be disabled)
   sfxVolume: number; // 0 .. 1.0
   speedRunEnabled?: boolean;
+  tourCompleted?: boolean;
+  outroSeen?: boolean;
   stats: PlayerStats;
   daily: DailyMissionProgress;
 }

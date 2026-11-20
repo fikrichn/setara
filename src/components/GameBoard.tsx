@@ -94,6 +94,7 @@ interface GameBoardProps {
   onRetryStage?: (level: LevelDef) => void;
   onNextLevel: () => void;
   hasNextLevel: boolean;
+  onStartBab5Outro?: () => void;
   onNewPractice?: () => void;
 }
 
@@ -192,14 +193,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   onRetryStage,
   onNextLevel,
   hasNextLevel,
+  onStartBab5Outro,
   onNewPractice,
 }) => {
   const isBossLevel = !!level.isBoss && !!level.boss && level.boss.phases.length > 0;
   const isStageOne = level.levelNumber === 1 && !level.isPractice;
   const bossGimmick = level.boss?.gimmick;
   const totalBossTime = level.boss?.timeLimitSeconds ?? 120;
-  const maxBossMistakes = level.boss?.maxMistakes ?? 4;
-  const bossPenaltySec = level.boss?.penaltySeconds ?? 30;
+  const baseBossPenaltySec =
+    level.chapterId === 0 ? 0 : (level.boss?.penaltySeconds ?? 5);
 
   const initialPhaseState = useMemo(
     () => cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial),
@@ -269,6 +271,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [solvedInfo, setSolvedInfo] = useState<{
     displayResult: string;
     stars: number;
+    mistakes: number;
     elapsedSec?: number;
     speedsterEarned?: boolean;
     speedRunTargetSec?: number;
@@ -276,6 +279,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const speedRunTargetSec = Math.max(15, level.parMoves * 7 + (level.chapterId >= 3 ? 6 : 0));
   const [speedRunElapsed, setSpeedRunElapsed] = useState(0);
+  const [activePlaySec, setActivePlaySec] = useState(0);
 
   const [tutorialIndex, setTutorialIndex] = useState<number | null>(
     level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null
@@ -316,6 +320,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const moodTimerRef = useRef<number | null>(null);
   const lowTimeNotifiedRef = useRef<0 | 30 | 15>(0);
   const hadMistakeRef = useRef(false);
+  const mistakesCountRef = useRef(0);
   const usedHintRef = useRef(false);
   const transposesRunRef = useRef(0);
 
@@ -343,8 +348,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return Math.max(0, totalBossPhases - bossPhaseIndex);
   }, [isBossLevel, bossGimmick, bossPreHealOneHp, bossHasHealed, bossPhaseIndex, totalBossPhases]);
 
-  const hasMistakeRule = isBossLevel && bossGimmick === 'freeze_penalty';
-  const isBossSleeping = hasMistakeRule && !bossAwake;
+  const isBossSleeping = isBossLevel && bossGimmick === 'freeze_penalty' && !bossAwake;
   const isTimeFrozen = isBossSleeping;
   const cosmicMode =
     isBossLevel &&
@@ -353,6 +357,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     bossGimmick === 'cosmic_many_hp' &&
     bossCurrentHp > 0 &&
     bossCurrentHp <= 5;
+  const effectiveBossPenalty = !isBossLevel
+    ? 0
+    : level.chapterId === 0
+      ? 0
+      : cosmicMode
+        ? 10
+        : baseBossPenaltySec;
   const isSpeedUp =
     isBossLevel &&
     !solvedInfo &&
@@ -583,6 +594,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setFlyingMidFlipped(false);
     setSolvedInfo(null);
     setSpeedRunElapsed(0);
+    setActivePlaySec(0);
     setShowMobileLog(false);
     setTutorialIndex(level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null);
     dragMetaRef.current = null;
@@ -590,6 +602,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     pendingRef.current = null;
     lowTimeNotifiedRef.current = 0;
     hadMistakeRef.current = false;
+    mistakesCountRef.current = 0;
     usedHintRef.current = false;
     transposesRunRef.current = 0;
     return clearFlyTimers;
@@ -608,16 +621,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const activeTutorialStep =
     tutorialIndex !== null && level.tutorialSteps ? level.tutorialSteps[tutorialIndex] : null;
 
-  // Optional Speed Run timer for regular stages
+  // Universal play timer for stats tracking + optional Speed Run timer
   useEffect(() => {
-    if (isBossLevel || !speedRunEnabled || solvedInfo || afkDefeat || activeTutorialStep) {
+    if (solvedInfo || bossTimedOut || afkDefeat || bossCinematic !== null || activeTutorialStep) {
       return;
     }
     const intervalId = window.setInterval(() => {
-      setSpeedRunElapsed((prev) => prev + 1);
+      setActivePlaySec((prev) => prev + 1);
+      if (!isBossLevel && speedRunEnabled) {
+        setSpeedRunElapsed((prev) => prev + 1);
+      }
     }, 1000);
     return () => window.clearInterval(intervalId);
-  }, [isBossLevel, speedRunEnabled, solvedInfo, afkDefeat, activeTutorialStep]);
+  }, [isBossLevel, speedRunEnabled, solvedInfo, bossTimedOut, afkDefeat, bossCinematic, activeTutorialStep]);
 
   const triggerFlyAnimation = useCallback(
     (
@@ -760,18 +776,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       flyMeta?: { term: Term; fromSide: Side; dragKind: DragKind; originPoint?: { x: number; y: number } },
       combineSide?: Side
     ) => {
-      // Helper for Bab 3 Freeze-Penalty wrong move (-30s, max 4 mistakes)
-      const applyFreezePenalty = (reasonText: string) => {
-        if (!level.boss) return;
+      // Boss wrong-move time-cut penalty (Bab 0: 0s no consequence; Bab 1-4: -5s; Bab 5: -5s / Cosmic -10s)
+      const applyBossWrongPenalty = (reasonText: string) => {
+        if (!level.boss || effectiveBossPenalty <= 0) return;
         hadMistakeRef.current = true;
+        mistakesCountRef.current += 1;
         sound.playNudge();
         sound.playBossTaunt();
         flashKiboMood('oops', 2000);
         const nextMistakes = bossMistakes + 1;
-        const nextTime = Math.max(0, bossTimeLeft - bossPenaltySec);
+        const nextTime = Math.max(0, bossTimeLeft - effectiveBossPenalty);
         setBossMistakes(nextMistakes);
         setBossTimeLeft(nextTime);
-        setPenaltyFlashText(`−${bossPenaltySec} dtk!`);
+        setPenaltyFlashText(`−${effectiveBossPenalty} dtk!`);
         setTimePenaltyFlash(true);
         if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
         timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
@@ -780,21 +797,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         setDragMeta(null);
         pendingRef.current = null;
 
-        if (nextMistakes >= maxBossMistakes || nextTime <= 0) {
+        if (nextTime <= 0) {
           phonkMusic.stop();
-          setBossDefeatReason('mistakes');
+          setBossDefeatReason('timeout');
           setBossTimedOut(true);
           setBossDialogue(level.boss.timeoutLine);
           setFeedback({
-            text: `Salah pindah ke-${nextMistakes}/${maxBossMistakes}! Waktumu langsung habis!`,
+            text: `Salah pindah memotong ${effectiveBossPenalty} detik terakhir! Waktumu habis!`,
             tone: 'warn',
           });
         } else {
           setBossDialogue(
-            `Hoaaam... salah pindah tuh! Ku-potong ${bossPenaltySec} detik, sisa kesempatan salahmu ${maxBossMistakes - nextMistakes}× lagi...`
+            cosmicMode
+              ? `HA! Salah di Mode Cosmic! Kupotong ${effectiveBossPenalty} detik waktumu!`
+              : `Salah langkah tuh! Waktu ku-potong ${effectiveBossPenalty} detik!`
           );
           setFeedback({
-            text: `${reasonText} (−${bossPenaltySec} dtk · Salah ${nextMistakes}/${maxBossMistakes})`,
+            text: `${reasonText} (−${effectiveBossPenalty} dtk)`,
             tone: 'warn',
           });
         }
@@ -802,10 +821,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       if (!result.ok || !result.nextState) {
         hadMistakeRef.current = true;
-        if (hasMistakeRule && level.boss) {
-          applyFreezePenalty(level.boss.kiboLines.gimmickAlert);
+        if (isBossLevel && effectiveBossPenalty > 0 && level.boss) {
+          applyBossWrongPenalty(
+            result.errorMessage || level.boss.kiboLines.gimmickAlert || 'Langkah salah!'
+          );
           return;
         }
+        mistakesCountRef.current += 1;
         sound.playNudge();
         flashKiboMood('oops', 1500);
         setFeedback({
@@ -815,12 +837,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         return;
       }
 
-      // Bab 3 Freeze-Penalty: catch wrong/counterproductive transpose or flip moves (both asleep & awake!)
-      if (hasMistakeRule && level.boss && (moveKind === 'transpose' || moveKind === 'flip')) {
+      // Catch strictly counterproductive transpose or flip moves during Bab 1-5 Boss battles
+      if (
+        isBossLevel &&
+        effectiveBossPenalty > 0 &&
+        level.boss &&
+        (moveKind === 'transpose' || moveKind === 'flip')
+      ) {
         const beforeDist = computeEquationComplexity(eqState);
         const afterDist = computeEquationComplexity(result.nextState);
-        if (afterDist >= beforeDist) {
-          applyFreezePenalty(level.boss.kiboLines.gimmickAlert);
+        if (afterDist > beforeDist) {
+          applyBossWrongPenalty(level.boss.kiboLines.gimmickAlert);
           return;
         }
       }
@@ -869,8 +896,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           side: result.cancelledSide,
           color: '#FDE68A',
         });
-        window.setTimeout(() => setZeroBurstSide(null), 650);
-        window.setTimeout(() => setSparkBurst(null), 650);
+        window.setTimeout(() => setZeroBurstSide(null), 960);
+        window.setTimeout(() => setSparkBurst(null), 700);
       } else if (moveKind === 'transpose') {
         sound.playTranspose();
         flashKiboMood('happy', 1500);
@@ -993,8 +1020,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             return;
           }
 
-          const stars =
-            newTotalMoves <= level.parMoves ? 3 : newTotalMoves <= level.parMoves + 3 ? 2 : 1;
+          const mistakes = mistakesCountRef.current;
+          const stars = mistakes === 0 ? 3 : mistakes <= 3 ? 2 : 1;
           window.setTimeout(() => {
             sound.playBossHit();
             phonkMusic.stop();
@@ -1007,36 +1034,41 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             sound.playBossVictory();
             setBossHitAnim(false);
             setBossStrikeAnim(false);
-            setSolvedInfo({ displayResult: check.displayResult as string, stars });
+            setSolvedInfo({ displayResult: check.displayResult as string, stars, mistakes });
             setBossCinematic('victory');
             onComplete(level, newTotalMoves, stars, {
-              flawless: !hadMistakeRef.current,
+              flawless: mistakes === 0,
               usedHint: usedHintRef.current,
               transposes: transposesRunRef.current,
+              elapsedSec: activePlaySec,
             });
           }, 760);
           return;
         }
 
-        const stars =
-          newTotalMoves <= level.parMoves ? 3 : newTotalMoves <= level.parMoves + 2 ? 2 : 1;
-        const capturedElapsed = speedRunElapsed;
-        const speedsterEarned = Boolean(speedRunEnabled && capturedElapsed <= speedRunTargetSec);
+        const mistakes = mistakesCountRef.current;
+        const stars = mistakes === 0 ? 3 : mistakes <= 3 ? 2 : 1;
+        const capturedSpeedElapsed = speedRunElapsed;
+        const capturedPlaySec = activePlaySec;
+        const speedsterEarned = Boolean(
+          speedRunEnabled && capturedSpeedElapsed <= speedRunTargetSec
+        );
         flashKiboMood('excited', 2400);
         window.setTimeout(() => {
           sound.playVictory();
           setSolvedInfo({
             displayResult: check.displayResult as string,
             stars,
-            elapsedSec: speedRunEnabled ? capturedElapsed : undefined,
+            mistakes,
+            elapsedSec: speedRunEnabled ? capturedSpeedElapsed : undefined,
             speedsterEarned,
             speedRunTargetSec: speedRunEnabled ? speedRunTargetSec : undefined,
           });
           onComplete(level, newTotalMoves, stars, {
-            flawless: !hadMistakeRef.current,
+            flawless: mistakes === 0,
             usedHint: usedHintRef.current,
             transposes: transposesRunRef.current,
-            elapsedSec: speedRunEnabled ? capturedElapsed : undefined,
+            elapsedSec: speedRunEnabled ? capturedSpeedElapsed : capturedPlaySec,
             speedsterEarned,
           });
         }, 320);
@@ -1054,15 +1086,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       bossPhaseIndex,
       bossMistakes,
       bossTimeLeft,
-      maxBossMistakes,
-      bossPenaltySec,
-      hasMistakeRule,
+      effectiveBossPenalty,
+      cosmicMode,
       totalBossTime,
       triggerFlyAnimation,
       tutorialIndex,
       flashKiboMood,
       speedRunEnabled,
       speedRunElapsed,
+      activePlaySec,
       speedRunTargetSec,
     ]
   );
@@ -1421,6 +1453,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const handleUndo = () => {
     if (undoStack.length === 0) return;
     hadMistakeRef.current = true;
+    mistakesCountRef.current += 1;
     sound.playPickup();
     const prev = undoStack[undoStack.length - 1];
     setUndoStack((s) => s.slice(0, -1));
@@ -1435,6 +1468,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     sound.playPickup();
     onRetryStage?.(level);
     hadMistakeRef.current = false;
+    mistakesCountRef.current = 0;
     usedHintRef.current = false;
     transposesRunRef.current = 0;
     const fresh = cloneState(isBossLevel ? level.boss!.phases[0].initial : level.initial);
@@ -1471,6 +1505,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setKiboMood('idle');
     setSolvedInfo(null);
     setSpeedRunElapsed(0);
+    setActivePlaySec(0);
     dragMetaRef.current = null;
     setDragMeta(null);
     pendingRef.current = null;
@@ -1504,20 +1539,21 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       setBossAwake(true);
       flashKiboMood('oops', 2400);
       setBossDialogue(
-        'HEY! Kamu bangunin tidur siangku?! Sekarang jamnya kujalankan, tapi aturan salah 4× (−30 dtk) tetap berlaku ya!'
+        'HEY! Kamu bangunin tidur siangku?! Sekarang waktu 2 menit berjalan — dan kalau salah kupotong 5 detik!'
       );
       setFeedback({
-        text: 'YAH! Kura Meriam terbangun gara-gara disentuh! Waktunya sekarang berjalan, dan aturan salah 4× tetap aktif!',
+        text: 'YAH! Kura Meriam terbangun gara-gara disentuh! Waktunya sekarang berjalan & salah pindah memotong 5 detik!',
         tone: 'warn',
       });
       return;
     }
 
-    // Bab 5 Cthulhu Samudra: interacting with him deducts 5 seconds immediately!
+    // Bab 5 Cthulhu Samudra: interacting with him deducts 5s (or 10s in Cosmic Mode) immediately!
     if (bossGimmick === 'cosmic_many_hp') {
-      const nextTime = Math.max(0, bossTimeLeft - 5);
+      const tapCut = cosmicMode ? 10 : 5;
+      const nextTime = Math.max(0, bossTimeLeft - tapCut);
       setBossTimeLeft(nextTime);
-      setPenaltyFlashText('−5 dtk!');
+      setPenaltyFlashText(`−${tapCut} dtk!`);
       setTimePenaltyFlash(true);
       if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
       timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
@@ -1527,7 +1563,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       const line =
         lines && lines.length > 0
           ? lines[bossTauntIdxRef.current % lines.length]
-          : 'BERANINYA MENYENTUHKU?! KUPOTONG 5 DETIK WAKTUMU!';
+          : `BERANINYA MENYENTUHKU?! KUPOTONG ${tapCut} DETIK WAKTUMU!`;
       bossTauntIdxRef.current += 1;
 
       if (nextTime <= 0) {
@@ -1540,7 +1576,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         setDragMeta(null);
         pendingRef.current = null;
         setFeedback({
-          text: 'ADUH! Menyentuh Cthulhu memotong 5 detik terakhir dan waktumu habis!',
+          text: `ADUH! Menyentuh Cthulhu memotong ${tapCut} detik terakhir dan waktumu habis!`,
           tone: 'warn',
         });
         return;
@@ -1548,7 +1584,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       setBossDialogue(line);
       setFeedback({
-        text: 'AWAS! Jangan sentuh Cthulhu — waktumu langsung terpotong 5 detik (−5 dtk)!',
+        text: `AWAS! Jangan sentuh Cthulhu — waktumu langsung terpotong ${tapCut} detik (−${tapCut} dtk)!`,
         tone: 'warn',
       });
       return;
@@ -1824,8 +1860,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       </header>
 
       {/* MAIN GAME ARENA */}
-      <main className="pointer-events-none relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-4 items-start">
-        <section className="pointer-events-auto flex flex-col gap-3 min-w-0">
+      <main className="pointer-events-none relative z-10 flex-1 w-full max-w-7xl mx-auto px-2 sm:px-6 py-2.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-2.5 sm:gap-4 items-start">
+        <section className="pointer-events-auto flex flex-col gap-2 sm:gap-3 min-w-0">
           {/* BOSS BANNER */}
           {isBossLevel && level.boss && (
             <BossArenaBanner
@@ -1842,7 +1878,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               isBossSleeping={isBossSleeping}
               cosmicMode={cosmicMode}
               mistakesUsed={bossMistakes}
-              maxMistakes={hasMistakeRule ? maxBossMistakes : 0}
+              maxMistakes={0}
               dialogue={bossDialogue}
               phonkActive={phonkActive}
               timeLeftSeconds={bossTimeLeft}
@@ -1873,8 +1909,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           )}
 
           {/* LIVE EQUATION SCOREBOARD BAR */}
-          <div className="rounded-2xl game-panel px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#35637A] tabular-nums">
+          <div className="rounded-2xl game-panel px-3 py-2 sm:px-4 sm:py-2.5 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-bold text-[#35637A] tabular-nums">
               <span>Langkah {totalMoves}</span>
               <span aria-hidden="true">·</span>
               <span>Target {level.parMoves}</span>
@@ -1889,7 +1925,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                       onToggleSpeedRun();
                     }}
                     title="Aktifkan/nonaktifkan pengatur waktu Speed Run untuk Medali Speedster"
-                    className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-extrabold border transition-colors cursor-pointer ${
+                    className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-extrabold border transition-colors cursor-pointer ${
                       speedRunEnabled
                         ? speedRunElapsed <= speedRunTargetSec
                           ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
@@ -1898,9 +1934,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                     }`}
                   >
                     {speedRunEnabled ? (
-                      <Zap className="w-3.5 h-3.5 text-[#D97706]" aria-hidden="true" />
+                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#D97706]" aria-hidden="true" />
                     ) : (
-                      <Timer className="w-3.5 h-3.5" aria-hidden="true" />
+                      <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true" />
                     )}
                     <span>
                       {speedRunEnabled
@@ -1912,7 +1948,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               )}
             </div>
             <div
-              className="font-mono font-extrabold text-base sm:text-xl text-[#0284C7] tracking-tight tabular-nums"
+              className="font-mono font-extrabold text-sm sm:text-xl text-[#0284C7] tracking-tight tabular-nums"
               aria-live="polite"
             >
               {pureSymbolsMode ? (
@@ -1923,85 +1959,106 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             </div>
           </div>
 
-          {/* KIBO COMPACT INTERACTIVE HELPER STRIP (NO SPOILER ON STAGE 2-20, UNIQUE PER BOSS!) */}
-          {!activeTutorialStep && (
-            <div
-              className={`rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-snug border-2 flex items-center gap-3 transition-colors shadow-sm ${
-                feedback?.tone === 'warn' || isBossCriticalTime
-                  ? 'bg-[#FFF1F2] border-[#FDA4AF] text-[#9F1239]'
-                  : isBossLowTime
-                    ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#78350F]'
-                    : feedback?.tone === 'good'
-                      ? 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]'
-                      : cosmicMode
-                        ? 'bg-[#2E1065]/92 border-[#E879F9] text-[#FAF5FF]'
-                        : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
-              }`}
-            >
-              <KiboAvatar
-                size="sm"
-                chapterId={level.chapterId}
-                mood={afkDefeat ? 'fainted' : kiboMood}
-                interactive
-                afkTimeoutMs={0}
-                customQuips={
-                  isBossLevel
-                    ? isBossLowTime
-                      ? level.boss?.kiboLines.lowTimeTapLines
-                      : level.boss?.kiboLines.tapLines
-                    : undefined
-                }
-                onInteract={(quip) => {
-                  flashKiboMood('giggle', 1300);
-                  setFeedback({ text: quip, tone: isBossCriticalTime ? 'warn' : 'good' });
-                }}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
+          {/* KIBO SPEECH BUBBLE HELPER ACROSS ALL STAGES */}
+          {!activeTutorialStep && (() => {
+            const activeHelperMsg = feedback ? feedback.text : defaultKiboMessage;
+            const bubbleStyle =
+              feedback?.tone === 'warn' || isBossCriticalTime
+                ? {
+                    box: 'bg-[#FFF1F2] border-[#FDA4AF] text-[#9F1239]',
+                    tail: 'bg-[#FFF1F2] border-[#FDA4AF]',
+                    name: 'text-[#BE123C]',
+                  }
+                : isBossLowTime
+                  ? {
+                      box: 'bg-[#FEF3C7] border-[#F59E0B] text-[#78350F]',
+                      tail: 'bg-[#FEF3C7] border-[#F59E0B]',
+                      name: 'text-[#B45309]',
+                    }
+                  : feedback?.tone === 'good'
+                    ? {
+                        box: 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]',
+                        tail: 'bg-[#ECFEFF] border-[#5EEAD4]',
+                        name: 'text-[#0F766E]',
+                      }
+                    : cosmicMode
+                      ? {
+                          box: 'bg-[#2E1065]/92 border-[#E879F9] text-[#FAF5FF]',
+                          tail: 'bg-[#2E1065] border-[#E879F9]',
+                          name: 'text-[#F0ABFC]',
+                        }
+                      : {
+                          box: 'bg-[#FFFDF5] border-[#7DD3FC] text-[#0D354C]',
+                          tail: 'bg-[#FFFDF5] border-[#7DD3FC]',
+                          name: 'text-[#0284C7]',
+                        };
+
+            return (
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="shrink-0">
+                  <KiboAvatar
+                    size="sm"
+                    chapterId={level.chapterId}
+                    mood={afkDefeat ? 'fainted' : kiboMood}
+                    interactive
+                    afkTimeoutMs={0}
+                    customQuips={
+                      isBossLevel
+                        ? isBossLowTime
+                          ? level.boss?.kiboLines.lowTimeTapLines
+                          : level.boss?.kiboLines.tapLines
+                        : undefined
+                    }
+                    onInteract={(quip) => {
+                      flashKiboMood('giggle', 1300);
+                      setFeedback({ text: quip, tone: isBossCriticalTime ? 'warn' : 'good' });
+                    }}
+                  />
+                </div>
+
+                <div
+                  key={activeHelperMsg}
+                  className={`relative flex-1 min-w-0 ml-1 rounded-2xl border-2 px-3 py-2 text-xs sm:text-sm leading-snug shadow-sm flex items-center justify-between gap-2 speech-bubble-pop ${bubbleStyle.box}`}
+                >
                   <span
-                    className={`font-extrabold text-[11px] ${
-                      isBossCriticalTime
-                        ? 'text-[#BE123C]'
-                        : isBossLowTime
-                          ? 'text-[#B45309]'
-                          : cosmicMode && !feedback
-                            ? 'text-[#F0ABFC]'
-                            : 'text-[#0284C7]'
-                    }`}
-                  >
-                    Kibo
-                  </span>
-                  {isBossLowTime && (
-                    <span
-                      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono font-extrabold tabular-nums ${
-                        isBossCriticalTime
-                          ? 'bg-[#BE123C] text-white animate-pulse'
-                          : 'bg-[#F59E0B] text-[#291802]'
-                      }`}
+                    aria-hidden="true"
+                    className={`absolute -left-2 top-3.5 w-3 h-3 rotate-45 border-l-2 border-b-2 ${bubbleStyle.tail}`}
+                  />
+                  <div className="relative z-10 min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`font-extrabold text-[11px] ${bubbleStyle.name}`}>Kibo</span>
+                      {isBossLowTime && (
+                        <span
+                          className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono font-extrabold tabular-nums ${
+                            isBossCriticalTime
+                              ? 'bg-[#BE123C] text-white animate-pulse'
+                              : 'bg-[#F59E0B] text-[#291802]'
+                          }`}
+                        >
+                          Sisa {bossTimeLeft}d! Ketuk Kibo!
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-semibold">“{activeHelperMsg}”</p>
+                  </div>
+
+                  {level.tutorialSteps && level.tutorialSteps.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTutorialIndex(0)}
+                      className="relative z-10 text-xs font-extrabold text-[#B45309] underline shrink-0 cursor-pointer"
                     >
-                      Sisa {bossTimeLeft}d! Ketuk Kibo!
-                    </span>
+                      Panduan
+                    </button>
                   )}
                 </div>
-                <span className="font-medium block">
-                  {feedback ? feedback.text : defaultKiboMessage}
-                </span>
               </div>
-              {level.tutorialSteps && level.tutorialSteps.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTutorialIndex(0)}
-                  className="text-xs font-extrabold text-[#B45309] underline shrink-0 cursor-pointer"
-                >
-                  Panduan
-                </button>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* TROPICAL LAGOON / COSMIC BALANCE BOARD */}
           <div
-            className={`relative rounded-3xl p-3 sm:p-5 overflow-hidden transition-all duration-500 ${
+            className={`relative rounded-3xl p-2 sm:p-5 overflow-hidden transition-all duration-500 ${
               cosmicMode ? 'cosmic-board-frame' : 'beach-board-frame'
             }`}
           >
@@ -2020,18 +2077,18 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               )}
             </AnimatePresence>
 
-            <div className="grid grid-cols-[1fr_52px_1fr] sm:grid-cols-[1fr_76px_1fr] items-center mb-2 px-1">
-              <div className="text-xs font-extrabold text-[#E0F2FE]">Ruas Kiri</div>
-              <div className="text-center text-[11px] font-extrabold text-[#FEF08A]">Setara</div>
-              <div className="text-right text-xs font-extrabold text-[#E0F2FE]">Ruas Kanan</div>
+            <div className="grid grid-cols-[1fr_36px_1fr] sm:grid-cols-[1fr_76px_1fr] items-center mb-1.5 sm:mb-2 px-1">
+              <div className="text-[11px] sm:text-xs font-extrabold text-[#E0F2FE]">Ruas Kiri</div>
+              <div className="text-center text-[10px] sm:text-[11px] font-extrabold text-[#FEF08A]">Setara</div>
+              <div className="text-right text-[11px] sm:text-xs font-extrabold text-[#E0F2FE]">Ruas Kanan</div>
             </div>
 
-            <div className="grid grid-cols-[1fr_46px_1fr] sm:grid-cols-[1fr_70px_1fr] gap-1.5 sm:gap-3 items-stretch min-h-[240px] sm:min-h-[300px]">
+            <div className="grid grid-cols-[1fr_34px_1fr] sm:grid-cols-[1fr_70px_1fr] gap-1 sm:gap-3 items-stretch min-h-[168px] sm:min-h-[300px]">
               {/* LEFT PAN */}
               <div
                 ref={leftPanRef}
                 onClick={() => handlePanClick('left')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
+                className={`relative rounded-2xl p-1.5 sm:p-5 flex flex-wrap items-center justify-center content-center gap-1.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
                   dragMeta && dragMeta.fromSide === 'right' && dragMeta.overSide === 'left'
                     ? 'bg-[#FEF9C3] border-[#F59E0B]'
                     : selected && selected.side === 'right'
@@ -2044,7 +2101,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 )}
 
                 {eqState.left.length === 0 ? (
-                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-5 py-4 font-display font-extrabold text-2xl sm:text-3xl text-[#0369A1]">
+                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-4 py-3 sm:px-5 sm:py-4 font-display font-extrabold text-xl sm:text-3xl text-[#0369A1]">
                     {pureSymbolsMode ? 'Kosong' : '0'}
                   </div>
                 ) : (
@@ -2093,10 +2150,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 )}
 
                 {zeroBurstSide === 'left' && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
-                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#D97706] drop-shadow">
-                      {pureSymbolsMode ? 'Lenyap!' : '0 · Lenyap!'}
-                    </span>
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-30">
+                    <div className="absolute w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-[#FDE047] animate-shockwave" />
+                    <div
+                      className="animate-zero-flash inline-flex items-center gap-1 rounded-2xl bg-gradient-to-r from-[#FDE047] via-[#FB923C] to-[#F43F5E] border-2 border-white px-3 py-1.5 sm:px-4 sm:py-2 font-display font-extrabold text-sm sm:text-xl text-white shadow-xl"
+                      style={{ textShadow: '0 2px 6px rgba(120, 53, 15, 0.7)' }}
+                    >
+                      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#FEF9C3] shrink-0" aria-hidden="true" />
+                      <span>{pureSymbolsMode ? 'LENYAP!' : '0 · LENYAP!'}</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2117,7 +2179,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                           : 'bg-gradient-to-b from-transparent via-[#FDE68A]/70 to-[#FBBF24]'
                       }`}
                     />
-                    <div className="relative my-2 flex items-center justify-center">
+                    <div className="relative my-1.5 sm:my-2 flex items-center justify-center">
                       {isCrossingPortal && (
                         <div className="pointer-events-none absolute inset-0 -m-2 rounded-2xl border-2 border-[#FEF08A] animate-shockwave" />
                       )}
@@ -2126,7 +2188,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                         style={{
                           transform: `rotate(${beamTilt}deg) scale(${isCrossingPortal ? 1.14 : 1})`,
                         }}
-                        className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#FDE047] to-[#F59E0B] text-[#291802] font-display font-extrabold text-3xl sm:text-4xl flex items-center justify-center border-2 border-[#FEF9C3] transition-transform duration-150 ${
+                        className={`w-8 h-8 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-b from-[#FDE047] to-[#F59E0B] text-[#291802] font-display font-extrabold text-2xl sm:text-4xl flex items-center justify-center border-2 border-[#FEF9C3] transition-transform duration-150 ${
                           isCrossingPortal
                             ? 'shadow-[0_0_24px_rgba(251,191,36,0.9)]'
                             : 'shadow-lg'
@@ -2137,7 +2199,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                       </div>
                     </div>
                     {bridgeFlash && (
-                      <div className="pointer-events-none absolute top-2.5 left-1/2 -translate-x-1/2 z-20 rounded-xl bg-[#FEF08A] text-[#291802] font-mono font-extrabold text-[11px] px-2 py-1 shadow-md whitespace-nowrap animate-pop-in flex items-center gap-1 border border-[#F59E0B]/40">
+                      <div className="pointer-events-none absolute top-2.5 left-1/2 -translate-x-1/2 z-20 rounded-xl bg-[#FEF08A] text-[#291802] font-mono font-extrabold text-[10px] sm:text-[11px] px-2 py-1 shadow-md whitespace-nowrap animate-pop-in flex items-center gap-1 border border-[#F59E0B]/40">
                         {bridgeFlash.startTerm && bridgeFlash.endTerm ? (
                           <>
                             <InlineTermChip
@@ -2174,7 +2236,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <div
                 ref={rightPanRef}
                 onClick={() => handlePanClick('right')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
+                className={`relative rounded-2xl p-1.5 sm:p-5 flex flex-wrap items-center justify-center content-center gap-1.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
                   dragMeta && dragMeta.fromSide === 'left' && dragMeta.overSide === 'right'
                     ? 'bg-[#FEF9C3] border-[#F59E0B]'
                     : selected && selected.side === 'left'
@@ -2187,7 +2249,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 )}
 
                 {eqState.right.length === 0 ? (
-                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-5 py-4 font-display font-extrabold text-2xl sm:text-3xl text-[#0369A1]">
+                  <div className="select-none rounded-2xl border-2 border-dashed border-[#7DD3FC] px-4 py-3 sm:px-5 sm:py-4 font-display font-extrabold text-xl sm:text-3xl text-[#0369A1]">
                     {pureSymbolsMode ? 'Kosong' : '0'}
                   </div>
                 ) : (
@@ -2236,10 +2298,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 )}
 
                 {zeroBurstSide === 'right' && (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-20">
-                    <span className="animate-zero-flash font-display font-extrabold text-2xl text-[#D97706] drop-shadow">
-                      {pureSymbolsMode ? 'Lenyap!' : '0 · Lenyap!'}
-                    </span>
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-30">
+                    <div className="absolute w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-[#FDE047] animate-shockwave" />
+                    <div
+                      className="animate-zero-flash inline-flex items-center gap-1 rounded-2xl bg-gradient-to-r from-[#FDE047] via-[#FB923C] to-[#F43F5E] border-2 border-white px-3 py-1.5 sm:px-4 sm:py-2 font-display font-extrabold text-sm sm:text-xl text-white shadow-xl"
+                      style={{ textShadow: '0 2px 6px rgba(120, 53, 15, 0.7)' }}
+                    >
+                      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-[#FEF9C3] shrink-0" aria-hidden="true" />
+                      <span>{pureSymbolsMode ? 'LENYAP!' : '0 · LENYAP!'}</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2717,6 +2784,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           }
           hasNextLevel={hasNextLevel}
           onNextLevel={onNextLevel}
+          onTriggerOutro={level.chapterId === 5 ? onStartBab5Outro : undefined}
           onReplay={handleReset}
           onExit={onExit}
         />
@@ -2765,9 +2833,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 ))}
               </div>
 
-              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#0284C7]">
-                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                <span>Stage Tuntas · {totalMoves} langkah</span>
+              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#0284C7] tabular-nums">
+                <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>
+                  Stage Tuntas · {totalMoves} langkah ·{' '}
+                  {solvedInfo.mistakes === 0
+                    ? 'Tanpa Salah!'
+                    : `${solvedInfo.mistakes}× Salah`}
+                </span>
               </div>
 
               <h2
@@ -2776,6 +2849,22 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               >
                 {pureSymbolsMode ? 'Peti Pusaka Sendirian!' : 'Hebat! x Ditemukan!'}
               </h2>
+
+              <div className="relative mt-2.5 w-full rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3.5 py-2 text-xs font-semibold text-[#0D354C] speech-bubble-pop">
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-t-2 border-[#7DD3FC]"
+                />
+                <span className="relative z-10">
+                  <strong className="text-[#0284C7]">Kibo:</strong> “
+                  {solvedInfo.mistakes === 0
+                    ? 'Sempurna! Nol kesalahan = 3 Bintang penuh untukmu!'
+                    : solvedInfo.mistakes <= 3
+                      ? `Hanya ${solvedInfo.mistakes}× salah = 2 Bintang! Ulangi tanpa salah untuk 3 Bintang!`
+                      : `Ada ${solvedInfo.mistakes}× salah = 1 Bintang. Coba lagi pelan-pelan ya!`}
+                  ”
+                </span>
+              </div>
 
               <div className="mt-4 w-full rounded-2xl bg-[#EBF8FF] border-2 border-[#BAE6FD] py-3.5 px-5">
                 {pureSymbolsMode ? (

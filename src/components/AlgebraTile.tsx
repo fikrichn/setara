@@ -156,7 +156,7 @@ export const PusakaHexIcon: React.FC<{ className?: string }> = ({ className }) =
   </svg>
 );
 
-export function renderFamilyGlyph(family: SymbolFamily, sign: 1 | -1, sizeClass = 'w-11 h-11 sm:w-12 sm:h-12') {
+export function renderFamilyGlyph(family: SymbolFamily, sign: 1 | -1, sizeClass = 'w-7 h-7 sm:w-11 sm:h-11') {
   if (family === 'sun') {
     return sign > 0 ? (
       <SunCarving className={`${sizeClass} text-[#FEF3C7]`} />
@@ -210,15 +210,15 @@ export const TileCardFace: React.FC<{
 
     return (
       <div
-        className={`relative select-none rounded-2xl w-[84px] h-[84px] sm:w-[92px] sm:h-[92px] p-2.5 flex flex-col items-center justify-center ${
+        className={`relative select-none rounded-xl sm:rounded-2xl w-[54px] h-[54px] sm:w-[92px] sm:h-[92px] p-1.5 sm:p-2.5 flex flex-col items-center justify-center ${
           isPos
             ? `${posBg} text-white tile-shadow-pos border-2`
             : 'bg-[#B91C1C] text-white tile-shadow-neg border-2 border-dashed border-white/75'
         } ${glowClass} ${className}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/20" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-white/20" />
         {!isPos && (
-          <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+          <span className="absolute top-1 right-1.5 sm:top-1.5 sm:right-2 font-display font-extrabold text-xs sm:text-sm leading-none text-[#FECACA]">
             −
           </span>
         )}
@@ -235,28 +235,28 @@ export const TileCardFace: React.FC<{
 
     return (
       <div
-        className={`relative select-none rounded-2xl min-w-[80px] min-h-[80px] sm:min-w-[88px] sm:min-h-[88px] px-3.5 py-2.5 flex flex-col items-center justify-center ${
+        className={`relative select-none rounded-xl sm:rounded-2xl min-w-[54px] min-h-[54px] sm:min-w-[88px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex flex-col items-center justify-center ${
           isPositive
             ? 'bg-[#0F766E] text-white tile-shadow-pos border-2 border-[#5EEAD4]/60'
             : 'bg-[#B91C1C] text-white tile-shadow-neg border-2 border-dashed border-white/70'
         } ${glowClass} ${className}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/15" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-white/15" />
         {showStones && (
           <div className="mb-0.5 opacity-95">
             {isPositive ? (
-              <SunCarving className="w-4 h-4 text-[#FEF08A]" />
+              <SunCarving className="w-3 h-3 sm:w-4 sm:h-4 text-[#FEF08A]" />
             ) : (
-              <MoonCarving className="w-4 h-4 text-[#FECACA]" />
+              <MoonCarving className="w-3 h-3 sm:w-4 sm:h-4 text-[#FECACA]" />
             )}
           </div>
         )}
-        <div className="flex items-baseline gap-0.5 font-display font-extrabold text-2xl sm:text-3xl leading-none tracking-tight tabular-nums">
-          <span className="text-lg sm:text-xl font-bold opacity-90">{signSymbol}</span>
+        <div className="flex items-baseline gap-0.5 font-display font-extrabold text-lg sm:text-3xl leading-none tracking-tight tabular-nums">
+          <span className="text-sm sm:text-xl font-bold opacity-90">{signSymbol}</span>
           <span>{absVal}</span>
         </div>
         {showStones && (
-          <span className="mt-0.5 text-[10px] font-semibold tracking-wide opacity-85">
+          <span className="mt-0.5 text-[8.5px] sm:text-[10px] font-semibold tracking-wide opacity-85 leading-none">
             {isPositive ? 'Surya' : 'Bulan'}
           </span>
         )}
@@ -275,22 +275,22 @@ export const TileCardFace: React.FC<{
       const isOpened = side ? side === 'right' : term.coeff < 0;
       return (
         <div
-          className={`relative select-none rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center text-white ${
+          className={`relative select-none rounded-xl sm:rounded-2xl w-[54px] h-[54px] sm:w-[94px] sm:h-[94px] p-1.5 sm:p-2.5 flex flex-col items-center justify-center text-white ${
             isNeg
               ? 'bg-[#B91C1C] tile-shadow-neg border-2 border-dashed border-white/75'
               : 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-2 border-[#FEF3C7]'
           } ${glowClass} ${className}`}
         >
-          <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/35" />
+          <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-[#FEF3C7]/35" />
           {isNeg && (
-            <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+            <span className="absolute top-1 right-1.5 sm:top-1.5 sm:right-2 font-display font-extrabold text-xs sm:text-sm leading-none text-[#FECACA]">
               −
             </span>
           )}
           {isOpened ? (
-            <OpenedChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+            <OpenedChestIcon className={`w-8 h-8 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
           ) : (
-            <TreasureChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+            <TreasureChestIcon className={`w-8 h-8 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
           )}
         </div>
       );
@@ -298,38 +298,38 @@ export const TileCardFace: React.FC<{
 
     return (
       <div
-        className={`relative select-none rounded-2xl min-w-[84px] min-h-[80px] sm:min-w-[94px] sm:min-h-[88px] px-3.5 py-2.5 flex flex-col items-center justify-center bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var ${
+        className={`relative select-none rounded-xl sm:rounded-2xl min-w-[54px] min-h-[54px] sm:min-w-[94px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex flex-col items-center justify-center bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var ${
           isNeg ? 'border-2 border-dashed border-[#FEE2E2]' : 'border-2 border-[#FEF3C7]/85'
         } ${glowClass} ${className}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/25" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-[#FEF3C7]/25" />
         {showStones && !hasCoeff && !hasDenom && (
-          <PusakaHexIcon className="w-4 h-4 text-[#FEF3C7] mb-0.5" />
+          <PusakaHexIcon className="w-3 h-3 sm:w-4 sm:h-4 text-[#FEF3C7] mb-0.5" />
         )}
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-0.5 sm:gap-1">
           {isNeg && !hasCoeff && (
-            <span className="font-display font-extrabold text-xl sm:text-2xl text-[#FEF2F2]">
+            <span className="font-display font-extrabold text-base sm:text-2xl text-[#FEF2F2]">
               −
             </span>
           )}
           {hasCoeff && (
-            <span className="inline-flex items-center justify-center rounded-lg px-2 py-0.5 font-display font-extrabold text-xl sm:text-2xl tabular-nums leading-tight bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D]">
+            <span className="inline-flex items-center justify-center rounded-md sm:rounded-lg px-1.5 py-0.5 sm:px-2 font-display font-extrabold text-sm sm:text-2xl tabular-nums leading-tight bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D]">
               {isNeg ? `−${absCoeff}` : absCoeff}
             </span>
           )}
-          <span className="font-display font-extrabold italic text-3xl sm:text-4xl leading-none tracking-tight">
+          <span className="font-display font-extrabold italic text-2xl sm:text-4xl leading-none tracking-tight">
             x
           </span>
         </div>
         {hasDenom && (
-          <div className="w-full mt-1.5 pt-1 border-t-2 border-white/80 flex justify-center">
-            <span className="inline-flex items-center justify-center rounded-md px-2 py-0.5 font-mono font-bold text-sm sm:text-base tabular-nums bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D]">
+          <div className="w-full mt-1 sm:mt-1.5 pt-0.5 sm:pt-1 border-t-2 border-white/80 flex justify-center">
+            <span className="inline-flex items-center justify-center rounded-md px-1.5 py-0.5 sm:px-2 font-mono font-bold text-[11px] sm:text-base tabular-nums bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D]">
               ÷{term.denom}
             </span>
           </div>
         )}
         {showStones && !hasDenom && (
-          <span className="mt-0.5 text-[10px] font-semibold tracking-wide text-[#FEF3C7]">
+          <span className="mt-0.5 text-[8.5px] sm:text-[10px] font-semibold tracking-wide text-[#FEF3C7] leading-none">
             Pusaka
           </span>
         )}
@@ -349,12 +349,12 @@ export const TileCardFace: React.FC<{
 
   return (
     <div
-      className={`relative select-none rounded-2xl min-h-[80px] sm:min-h-[88px] px-3.5 py-2.5 flex items-center justify-center gap-1.5 bg-[#1E3A5F] text-white tile-shadow-group border-2 border-[#93C5FD]/60 ${glowClass} ${className}`}
+      className={`relative select-none rounded-xl sm:rounded-2xl min-h-[54px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex items-center justify-center gap-1 sm:gap-1.5 bg-[#1E3A5F] text-white tile-shadow-group border-2 border-[#93C5FD]/60 ${glowClass} ${className}`}
     >
-      <span className="inline-flex items-center justify-center rounded-lg px-2 py-1 font-display font-extrabold text-xl sm:text-2xl tabular-nums bg-[#D97706] text-white border border-[#FDE68A]">
+      <span className="inline-flex items-center justify-center rounded-md sm:rounded-lg px-1.5 py-0.5 sm:px-2 sm:py-1 font-display font-extrabold text-sm sm:text-2xl tabular-nums bg-[#D97706] text-white border border-[#FDE68A]">
         {term.factor < 0 ? `−${Math.abs(term.factor)}` : term.factor}
       </span>
-      <div className="rounded-xl bg-white/12 px-2.5 py-1.5 font-display font-bold text-xl sm:text-2xl tracking-tight">
+      <div className="rounded-lg sm:rounded-xl bg-white/12 px-1.5 py-1 sm:px-2.5 sm:py-1.5 font-display font-bold text-sm sm:text-2xl tracking-tight">
         (<span className="italic text-[#FDE68A]">{xLabel}</span>
         <span>{cLabel}</span>)
       </div>
@@ -374,18 +374,18 @@ export const OperatorCardFace: React.FC<{
   const isGold = tone === 'gold';
   return (
     <div
-      className={`relative select-none rounded-2xl min-w-[82px] min-h-[82px] sm:min-w-[88px] sm:min-h-[88px] px-3 py-2 flex flex-col items-center justify-center text-white border-2 ${
+      className={`relative select-none rounded-xl sm:rounded-2xl min-w-[54px] min-h-[54px] sm:min-w-[88px] sm:min-h-[88px] px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col items-center justify-center text-white border-2 ${
         isGold
           ? 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-[#FEF3C7]'
           : 'bg-[#0F766E] tile-shadow-pos border-[#5EEAD4]'
       } ${glowGold ? 'ring-2 ring-[#FEF08A]' : 'shadow-md'}`}
     >
-      <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/20" />
-      <div className="font-display font-extrabold text-2xl sm:text-3xl leading-none tabular-nums whitespace-nowrap">
+      <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-white/20" />
+      <div className="font-display font-extrabold text-lg sm:text-3xl leading-none tabular-nums whitespace-nowrap">
         <span>{opSymbol}</span>
         <span>{valueLabel}</span>
       </div>
-      <span className="mt-1 text-[10px] font-extrabold uppercase tracking-wider opacity-90">
+      <span className="mt-0.5 sm:mt-1 text-[8.5px] sm:text-[10px] font-extrabold uppercase tracking-wider opacity-90">
         {opSymbol === '×' ? 'Kali' : 'Bagi'}
       </span>
     </div>
@@ -596,15 +596,15 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
             onTap(term, side);
           }
         }}
-        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl w-[84px] h-[84px] sm:w-[92px] sm:h-[92px] p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in ${
+        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-xl sm:rounded-2xl w-[54px] h-[54px] sm:w-[92px] sm:h-[92px] p-1.5 sm:p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in ${
           isPos
             ? `${posBg} text-white tile-shadow-pos border-2`
             : 'bg-[#B91C1C] text-white tile-shadow-neg border-2 border-dashed border-white/70'
         } ${selectionClass} ${opacityClass}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/20" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-white/20" />
         {!isPos && (
-          <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+          <span className="absolute top-1 right-1.5 sm:top-1.5 sm:right-2 font-display font-extrabold text-xs sm:text-sm leading-none text-[#FECACA]">
             −
           </span>
         )}
@@ -637,28 +637,28 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
             onTap(term, side);
           }
         }}
-        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl min-w-[80px] min-h-[80px] sm:min-w-[88px] sm:min-h-[88px] px-3.5 py-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in ${
+        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-xl sm:rounded-2xl min-w-[54px] min-h-[54px] sm:min-w-[88px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in ${
           isPositive
             ? 'bg-[#0F766E] text-white tile-shadow-pos border-2 border-[#5EEAD4]/55'
             : 'bg-[#B91C1C] text-white tile-shadow-neg border-2 border-dashed border-white/65'
         } ${selectionClass} ${opacityClass}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/15" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-white/15" />
         {showStones && (
           <div className="mb-0.5 opacity-95">
             {isPositive ? (
-              <SunCarving className="w-4 h-4 text-[#FEF08A]" />
+              <SunCarving className="w-3 h-3 sm:w-4 sm:h-4 text-[#FEF08A]" />
             ) : (
-              <MoonCarving className="w-4 h-4 text-[#FECACA]" />
+              <MoonCarving className="w-3 h-3 sm:w-4 sm:h-4 text-[#FECACA]" />
             )}
           </div>
         )}
-        <div className="flex items-baseline gap-0.5 font-display font-extrabold text-2xl sm:text-3xl leading-none tracking-tight tabular-nums">
-          <span className="text-lg sm:text-xl font-bold opacity-90">{signSymbol}</span>
+        <div className="flex items-baseline gap-0.5 font-display font-extrabold text-lg sm:text-3xl leading-none tracking-tight tabular-nums">
+          <span className="text-sm sm:text-xl font-bold opacity-90">{signSymbol}</span>
           <span>{absVal}</span>
         </div>
         {showStones && (
-          <span className="mt-1 text-[10px] font-semibold tracking-wide opacity-85">
+          <span className="mt-0.5 text-[8.5px] sm:text-[10px] font-semibold tracking-wide opacity-85 leading-none">
             {isPositive ? 'Surya' : 'Bulan'}
           </span>
         )}
@@ -696,22 +696,22 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
               onTap(term, side);
             }
           }}
-          className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in text-white ${
+          className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-xl sm:rounded-2xl w-[54px] h-[54px] sm:w-[94px] sm:h-[94px] p-1.5 sm:p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in text-white ${
             isNeg
               ? 'bg-[#B91C1C] tile-shadow-neg border-2 border-dashed border-white/70'
               : 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-2 border-[#FEF3C7]'
           } ${selectionClass} ${opacityClass}`}
         >
-          <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/35" />
+          <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-[#FEF3C7]/35" />
           {isNeg && (
-            <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+            <span className="absolute top-1 right-1.5 sm:top-1.5 sm:right-2 font-display font-extrabold text-xs sm:text-sm leading-none text-[#FECACA]">
               −
             </span>
           )}
           {isOpened ? (
-            <OpenedChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+            <OpenedChestIcon className={`w-8 h-8 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
           ) : (
-            <TreasureChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+            <TreasureChestIcon className={`w-8 h-8 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
           )}
         </div>
       );
@@ -735,18 +735,18 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
             onTap(term, side);
           }
         }}
-        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl min-w-[84px] sm:min-w-[94px] min-h-[80px] sm:min-h-[88px] px-3.5 py-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var ${
+        className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-xl sm:rounded-2xl min-w-[54px] sm:min-w-[94px] min-h-[54px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var ${
           isNeg ? 'border-2 border-dashed border-[#FEE2E2]' : 'border-2 border-[#FEF3C7]/80'
         } ${selectionClass} ${opacityClass}`}
       >
-        <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/20" />
+        <div className="pointer-events-none absolute inset-1 sm:inset-1.5 rounded-lg sm:rounded-xl border border-[#FEF3C7]/20" />
         {showStones && !hasCoeff && !hasDenom && (
-          <PusakaHexIcon className="w-4 h-4 text-[#FEF3C7] mb-0.5" />
+          <PusakaHexIcon className="w-3 h-3 sm:w-4 sm:h-4 text-[#FEF3C7] mb-0.5" />
         )}
 
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-0.5 sm:gap-1">
           {isNeg && !hasCoeff && (
-            <span className="font-display font-extrabold text-xl sm:text-2xl text-[#FEF2F2]">
+            <span className="font-display font-extrabold text-base sm:text-2xl text-[#FEF2F2]">
               −
             </span>
           )}
@@ -760,24 +760,24 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
                 }
               }}
               title={canDragCoeff ? 'Tarik pengali ini menyeberangi =' : undefined}
-              className={`inline-flex items-center justify-center rounded-lg px-2 py-0.5 font-display font-extrabold text-xl sm:text-2xl tabular-nums leading-tight ${
+              className={`inline-flex items-center justify-center rounded-md sm:rounded-lg px-1.5 py-0.5 sm:px-2 font-display font-extrabold text-sm sm:text-2xl tabular-nums leading-tight ${
                 canDragCoeff
                   ? 'bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D] shadow-sm cursor-grab hover:bg-[#92400E]'
                   : 'bg-[#92400E]/60 text-white'
               }`}
             >
               {isNeg ? `−${absCoeff}` : absCoeff}
-              {canDragCoeff && <span className="text-xs ml-0.5 opacity-80">×</span>}
+              {canDragCoeff && <span className="text-[10px] sm:text-xs ml-0.5 opacity-80">×</span>}
             </div>
           )}
 
-          <span className="font-display font-extrabold italic text-3xl sm:text-4xl leading-none tracking-tight">
+          <span className="font-display font-extrabold italic text-2xl sm:text-4xl leading-none tracking-tight">
             x
           </span>
         </div>
 
         {hasDenom && (
-          <div className="w-full mt-1.5 pt-1 border-t-2 border-white/80 flex justify-center">
+          <div className="w-full mt-1 sm:mt-1.5 pt-0.5 sm:pt-1 border-t-2 border-white/80 flex justify-center">
             <div
               onPointerDown={(e) => {
                 if (canDragDenom) {
@@ -786,7 +786,7 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
                 }
               }}
               title={canDragDenom ? 'Tarik pembagi ini menyeberangi =' : undefined}
-              className={`inline-flex items-center justify-center rounded-md px-2 py-0.5 font-mono font-bold text-sm sm:text-base tabular-nums ${
+              className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 sm:px-2 font-mono font-bold text-[11px] sm:text-base tabular-nums ${
                 canDragDenom
                   ? 'bg-[#78350F] text-[#FEF3C7] border border-[#FCD34D] cursor-grab hover:bg-[#92400E]'
                   : 'bg-[#92400E]/55 text-white'
@@ -798,7 +798,7 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
         )}
 
         {showStones && !hasDenom && (
-          <span className="mt-1 text-[10px] font-semibold tracking-wide text-[#FEF3C7]">
+          <span className="mt-0.5 text-[8.5px] sm:text-[10px] font-semibold tracking-wide text-[#FEF3C7] leading-none">
             Pusaka
           </span>
         )}
@@ -834,7 +834,7 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
           onTap(term, side);
         }
       }}
-      className={`relative select-none touch-none cursor-pointer rounded-2xl min-h-[80px] sm:min-h-[88px] px-3.5 py-2.5 flex items-center justify-center gap-1.5 transition-transform duration-150 animate-pop-in bg-[#1E3A5F] text-white tile-shadow-group border-2 border-[#93C5FD]/55 ${selectionClass} ${opacityClass}`}
+      className={`relative select-none touch-none cursor-pointer rounded-xl sm:rounded-2xl min-h-[54px] sm:min-h-[88px] px-2 py-1.5 sm:px-3.5 sm:py-2.5 flex items-center justify-center gap-1 sm:gap-1.5 transition-transform duration-150 animate-pop-in bg-[#1E3A5F] text-white tile-shadow-group border-2 border-[#93C5FD]/55 ${selectionClass} ${opacityClass}`}
     >
       <div
         onPointerDown={(e) => {
@@ -843,16 +843,16 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
             onPointerStart(e, term, side, 'coeff');
           }
         }}
-        className={`inline-flex items-center justify-center rounded-lg px-2 py-1 font-display font-extrabold text-xl sm:text-2xl tabular-nums ${
+        className={`inline-flex items-center justify-center rounded-md sm:rounded-lg px-1.5 py-0.5 sm:px-2 sm:py-1 font-display font-extrabold text-sm sm:text-2xl tabular-nums ${
           canDragFactor
             ? 'bg-[#D97706] text-white border border-[#FDE68A] cursor-grab'
             : 'bg-white/15 text-white'
         }`}
       >
         {term.factor < 0 ? `−${Math.abs(term.factor)}` : term.factor}
-        {canDragFactor && <span className="text-xs ml-0.5">×</span>}
+        {canDragFactor && <span className="text-[10px] sm:text-xs ml-0.5">×</span>}
       </div>
-      <div className="rounded-xl bg-white/12 px-2.5 py-1.5 font-display font-bold text-xl sm:text-2xl tracking-tight">
+      <div className="rounded-lg sm:rounded-xl bg-white/12 px-1.5 py-1 sm:px-2.5 sm:py-1.5 font-display font-bold text-sm sm:text-2xl tracking-tight">
         (<span className="italic text-[#FDE68A]">{xLabel}</span>
         <span>{cLabel}</span>)
       </div>

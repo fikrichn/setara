@@ -7,6 +7,7 @@ import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'rea
 import {
   Award,
   BookOpen,
+  CalendarCheck2,
   Compass,
   Crown,
   Home,
@@ -18,9 +19,11 @@ import {
 import { BeachBackdrop } from './components/BeachBackdrop';
 import { BeachEasterEggs } from './components/BeachEasterEggs';
 import { DailyMissionsCard } from './components/DailyMissionsCard';
+import { InteractiveTourOverlay, TourScreenTarget } from './components/InteractiveTourOverlay';
 import { KiboAvatar, KiboSpecialEndingModal } from './components/KiboCompanion';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import type { CutsceneId } from './components/ProfileBadgesCard';
 import { SettingsModal } from './components/SettingsExitModals';
 import { evaluateBadges } from './game/achievements';
 import { generatePracticeLevel } from './game/algebraEngine';
@@ -28,19 +31,26 @@ import {
   EvaluatedDailyMission,
   createFreshDailyProgress,
   evaluateDailyMissions,
+  getLocalDateKey,
 } from './game/dailyMissions';
 import { getInitialLobbyKiboLine } from './game/kiboDialogues';
 import { ALL_LEVELS, CHAPTERS, getNextLevel } from './game/levels';
 import { phonkMusic } from './game/phonkMusic';
 import { sound } from './game/sound';
 import { stageMusic } from './game/stageMusic';
-import { LevelDef, ProgressStore } from './game/types';
+import { DailyHistoryPoint, LevelDef, ProgressStore } from './game/types';
 
 const GameBoard = lazy(() =>
   import('./components/GameBoard').then((m) => ({ default: m.GameBoard }))
 );
 const KiboIntroVideo = lazy(() =>
   import('./components/KiboIntroVideo').then((m) => ({ default: m.KiboIntroVideo }))
+);
+const BossCinematicVideo = lazy(() =>
+  import('./components/BossCinematicVideo').then((m) => ({ default: m.BossCinematicVideo }))
+);
+const StoryOutroVideo = lazy(() =>
+  import('./components/StoryOutroVideo').then((m) => ({ default: m.StoryOutroVideo }))
 );
 const TreasureMap = lazy(() =>
   import('./components/TreasureMap').then((m) => ({ default: m.TreasureMap }))
@@ -52,7 +62,7 @@ const ProfileBadgesCard = lazy(() =>
   import('./components/ProfileBadgesCard').then((m) => ({ default: m.ProfileBadgesCard }))
 );
 
-type GameScreen = 'LOBBY' | 'MAP' | 'ARCADE' | 'CODEX' | 'BADGES';
+type GameScreen = 'LOBBY' | 'MAP' | 'DAILY' | 'ARCADE' | 'CODEX' | 'BADGES';
 
 const STORAGE_KEY = 'setara_progress_v1';
 
@@ -63,6 +73,8 @@ function loadProgress(): ProgressStore {
     totalTransposes: 0,
     noHintBossWins: 0,
     speedsterCount: 0,
+    totalTimeSpentSec: 0,
+    dailyHistory: [] as DailyHistoryPoint[],
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -93,8 +105,17 @@ function loadProgress(): ProgressStore {
             typeof parsed.stats?.noHintBossWins === 'number' ? parsed.stats.noHintBossWins : 0,
           speedsterCount:
             typeof parsed.stats?.speedsterCount === 'number' ? parsed.stats.speedsterCount : 0,
+          totalTimeSpentSec:
+            typeof parsed.stats?.totalTimeSpentSec === 'number'
+              ? parsed.stats.totalTimeSpentSec
+              : 0,
+          dailyHistory: Array.isArray(parsed.stats?.dailyHistory)
+            ? parsed.stats.dailyHistory
+            : [],
         },
         daily: createFreshDailyProgress(parsed.daily),
+        tourCompleted: Boolean(parsed.tourCompleted),
+        outroSeen: Boolean(parsed.outroSeen),
       };
     }
   } catch {
@@ -109,6 +130,8 @@ function loadProgress(): ProgressStore {
     speedRunEnabled: false,
     stats: defaultStats,
     daily: createFreshDailyProgress(),
+    tourCompleted: false,
+    outroSeen: false,
   };
 }
 
@@ -120,11 +143,17 @@ export default function App() {
   const [progress, setProgress] = useState<ProgressStore>(() => loadProgress());
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [lobbyKiboLine, setLobbyKiboLine] = useState<string | null>(null);
+  const [dailyKiboLine, setDailyKiboLine] = useState<string | null>(null);
+  const [arcadeKiboLine, setArcadeKiboLine] = useState<string | null>(null);
+  const [badgesKiboLine, setBadgesKiboLine] = useState<string | null>(null);
   const [lobbyRuleIdx, setLobbyRuleIdx] = useState(0);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [exitedGame, setExitedGame] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [showBab5Outro, setShowBab5Outro] = useState(false);
+  const [replayBossChapterId, setReplayBossChapterId] = useState<number | null>(null);
   const [specialEndingOpen, setSpecialEndingOpen] = useState(false);
   const [recentBadgeToast, setRecentBadgeToast] = useState<{
     title: string;
@@ -138,12 +167,64 @@ export default function App() {
     };
   }, []);
 
+  // Periodic gentle session time tracking for D3 Stats when browsing menus
   useEffect(() => {
-    if (!activeLevel && progress.daily?.specialEndingUnlocked && !progress.daily?.specialEndingSeen) {
+    if (exitedGame || showIntro || showBab5Outro || replayBossChapterId !== null || activeLevel) {
+      return;
+    }
+    const tickId = window.setInterval(() => {
+      setProgress((prev) => {
+        const todayKey = getLocalDateKey();
+        const prevHist = prev.stats.dailyHistory ?? [];
+        const existingIdx = prevHist.findIndex((h) => h.dateKey === todayKey);
+        const nextHist = [...prevHist];
+        if (existingIdx >= 0) {
+          nextHist[existingIdx] = {
+            ...nextHist[existingIdx],
+            timeSpentSec: nextHist[existingIdx].timeSpentSec + 15,
+            streakDay: prev.daily?.streakDays ?? nextHist[existingIdx].streakDay,
+          };
+        } else {
+          nextHist.push({
+            dateKey: todayKey,
+            solved: prev.daily?.stagesToday ?? 0,
+            timeSpentSec: 15,
+            streakDay: prev.daily?.streakDays ?? 0,
+          });
+        }
+        return {
+          ...prev,
+          stats: {
+            ...prev.stats,
+            totalTimeSpentSec: (prev.stats.totalTimeSpentSec ?? 0) + 15,
+            dailyHistory: nextHist.slice(-30),
+          },
+        };
+      });
+    }, 15000);
+    return () => window.clearInterval(tickId);
+  }, [exitedGame, showIntro, showBab5Outro, replayBossChapterId, activeLevel]);
+
+  useEffect(() => {
+    if (
+      !activeLevel &&
+      !showIntro &&
+      !showBab5Outro &&
+      !tourOpen &&
+      progress.daily?.specialEndingUnlocked &&
+      !progress.daily?.specialEndingSeen
+    ) {
       sound.playVictory();
       setSpecialEndingOpen(true);
     }
-  }, [activeLevel, progress.daily?.specialEndingUnlocked, progress.daily?.specialEndingSeen]);
+  }, [
+    activeLevel,
+    showIntro,
+    showBab5Outro,
+    tourOpen,
+    progress.daily?.specialEndingUnlocked,
+    progress.daily?.specialEndingSeen,
+  ]);
 
   // Sync audio volumes & persistence
   useEffect(() => {
@@ -157,7 +238,7 @@ export default function App() {
     }
   }, [progress]);
 
-  const activeThemeChapter = screen === 'MAP' ? selectedChapterId : 0;
+  const activeThemeChapter = screen === 'MAP' ? Math.min(5, selectedChapterId) : 0;
 
   // Always-active tropical beach stage music outside Boss levels (Lobby/Bab 0 use original song; Bab 1-5 use unique songs)
   useEffect(() => {
@@ -168,7 +249,11 @@ export default function App() {
     }
 
     const inBoss = !!activeLevel?.isBoss;
-    const activeMusicTheme = activeLevel ? activeLevel.chapterId : screen === 'MAP' ? selectedChapterId : 0;
+    const activeMusicTheme = activeLevel
+      ? activeLevel.chapterId
+      : screen === 'MAP'
+        ? Math.min(5, selectedChapterId)
+        : 0;
     if (!inBoss) {
       phonkMusic.stop();
       stageMusic.start(activeMusicTheme);
@@ -210,6 +295,10 @@ export default function App() {
     () => CHAPTERS.find((c) => c.id === selectedChapterId) || CHAPTERS[0],
     [selectedChapterId]
   );
+
+  const dailyMissionsList = useMemo(() => evaluateDailyMissions(progress), [progress]);
+  const dailyCompletedCount = dailyMissionsList.filter((m) => m.completed).length;
+  const dailyClaimableCount = dailyMissionsList.filter((m) => m.completed && !m.claimed).length;
 
   const handleChangeMusicVolume = (val: number) => {
     const clamped = Math.max(0.15, Math.min(1, val));
@@ -312,15 +401,8 @@ export default function App() {
       const prevFlawless = prev.stats.flawlessStageIds;
       const shouldAddFlawless =
         !level.isPractice && meta?.flawless && !prevFlawless.includes(level.id);
-      const nextStats = {
-        flawlessStageIds: shouldAddFlawless ? [...prevFlawless, level.id] : prevFlawless,
-        retryCount: prev.stats.retryCount,
-        totalTransposes: prev.stats.totalTransposes + (meta?.transposes ?? 0),
-        noHintBossWins:
-          prev.stats.noHintBossWins + (level.isBoss && !meta?.usedHint ? 1 : 0),
-        speedsterCount: prev.stats.speedsterCount + (meta?.speedsterEarned ? 1 : 0),
-      };
-
+      const elapsedDelta = Math.max(2, meta?.elapsedSec ?? 12);
+      const todayKey = getLocalDateKey();
       const freshDaily = createFreshDailyProgress(prev.daily);
       const updatedDaily = {
         ...freshDaily,
@@ -328,6 +410,36 @@ export default function App() {
         stagesToday: freshDaily.stagesToday + 1,
         practiceToday: freshDaily.practiceToday + (level.isPractice ? 1 : 0),
         flawlessToday: freshDaily.flawlessToday + (meta?.flawless ? 1 : 0),
+      };
+
+      const prevHistory = prev.stats.dailyHistory ?? [];
+      const existingHistIdx = prevHistory.findIndex((h) => h.dateKey === todayKey);
+      const nextHistory = [...prevHistory];
+      if (existingHistIdx >= 0) {
+        nextHistory[existingHistIdx] = {
+          ...nextHistory[existingHistIdx],
+          solved: nextHistory[existingHistIdx].solved + 1,
+          timeSpentSec: nextHistory[existingHistIdx].timeSpentSec + elapsedDelta,
+          streakDay: updatedDaily.streakDays,
+        };
+      } else {
+        nextHistory.push({
+          dateKey: todayKey,
+          solved: 1,
+          timeSpentSec: elapsedDelta,
+          streakDay: updatedDaily.streakDays,
+        });
+      }
+
+      const nextStats = {
+        flawlessStageIds: shouldAddFlawless ? [...prevFlawless, level.id] : prevFlawless,
+        retryCount: prev.stats.retryCount,
+        totalTransposes: prev.stats.totalTransposes + (meta?.transposes ?? 0),
+        noHintBossWins:
+          prev.stats.noHintBossWins + (level.isBoss && !meta?.usedHint ? 1 : 0),
+        speedsterCount: prev.stats.speedsterCount + (meta?.speedsterEarned ? 1 : 0),
+        totalTimeSpentSec: (prev.stats.totalTimeSpentSec ?? 0) + elapsedDelta,
+        dailyHistory: nextHistory.slice(-30),
       };
 
       let nextState: ProgressStore;
@@ -367,8 +479,15 @@ export default function App() {
       ) {
         const nextStreak = updatedDaily.streakDays + 1;
         const unlockedNow = Boolean(updatedDaily.specialEndingUnlocked || nextStreak >= 7);
+        const updatedHistWithStreak = (nextState.stats.dailyHistory ?? []).map((h) =>
+          h.dateKey === todayKey ? { ...h, streakDay: nextStreak } : h
+        );
         nextState = {
           ...nextState,
+          stats: {
+            ...nextState.stats,
+            dailyHistory: updatedHistWithStreak,
+          },
           daily: {
             ...updatedDaily,
             streakDays: nextStreak,
@@ -419,9 +538,45 @@ export default function App() {
       announceNewBadges(prev, nextState);
       return nextState;
     });
-    setLobbyKiboLine(
-      `Yeay! Kamu klaim ${mission.bonusPoints} Poin Bonus & ${mission.badgeBoostLabel} dari misi "${mission.title}"!`
+    setDailyKiboLine(
+      `Yeay! Kamu klaim +${mission.bonusPoints} Poin Bonus & ${mission.badgeBoostLabel} dari misi "${mission.title}"!`
     );
+  };
+
+  const handlePlayCutscene = (id: CutsceneId) => {
+    if (id === 'intro') {
+      setShowIntro(true);
+      return;
+    }
+    if (id === 'outro_bab5') {
+      setShowBab5Outro(true);
+      return;
+    }
+    if (id === 'secret_7d') {
+      setSpecialEndingOpen(true);
+      return;
+    }
+    if (id.startsWith('boss_')) {
+      const ch = Number(id.replace('boss_', ''));
+      if (!Number.isNaN(ch)) {
+        setReplayBossChapterId(ch);
+      }
+    }
+  };
+
+  const handleTourScreenSwitch = (target: TourScreenTarget) => {
+    setScreen(target);
+    if (target === 'MAP' && selectedChapterId === 6) {
+      setSelectedChapterId(0);
+    }
+  };
+
+  const handleCompleteTour = () => {
+    setTourOpen(false);
+    setProgress((prev) => ({
+      ...prev,
+      tourCompleted: true,
+    }));
   };
 
   const handleRetryStage = () => {
@@ -446,6 +601,11 @@ export default function App() {
 
   const handleStartChapter = (chapterId: number) => {
     sound.playPickup();
+    if (chapterId === 6) {
+      setSelectedChapterId(6);
+      setScreen('MAP');
+      return;
+    }
     const ch = CHAPTERS.find((c) => c.id === chapterId);
     if (ch && ch.levels.length > 0) {
       const firstLvl = ch.levels[0];
@@ -474,9 +634,15 @@ export default function App() {
             <h1 className="mt-4 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
               Sampai Jumpa Lagi!
             </h1>
-            <p className="mt-2 text-sm text-[#35637A] leading-relaxed">
-              Kibo menunggumu kembali bermain aljabar di Pantai Setara kapan saja kamu siap!
-            </p>
+            <div className="relative mt-3 w-full rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-4 py-2.5 shadow-sm speech-bubble-pop">
+              <span
+                aria-hidden="true"
+                className="absolute -top-2 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rotate-45 bg-[#EBF8FF] border-l-2 border-t-2 border-[#7DD3FC]"
+              />
+              <p className="relative z-10 text-sm text-[#0D354C] font-semibold leading-relaxed">
+                “Kibo menunggumu kembali bermain aljabar di Pantai Setara kapan saja kamu siap!”
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -503,8 +669,50 @@ export default function App() {
           <KiboIntroVideo
             onFinish={() => {
               setShowIntro(false);
-              stageMusic.start(screen === 'MAP' ? selectedChapterId : 0);
+              stageMusic.start(screen === 'MAP' ? Math.min(5, selectedChapterId) : 0);
+              if (!progress.tourCompleted) {
+                setScreen('LOBBY');
+                setTourOpen(true);
+              }
             }}
+          />
+        </Suspense>
+        <OfflineIndicator />
+      </>
+    );
+  }
+
+  // BAB 5 OUTRO ENDING VIDEO
+  if (showBab5Outro) {
+    return (
+      <>
+        <Suspense fallback={null}>
+          <StoryOutroVideo
+            onFinish={() => {
+              setShowBab5Outro(false);
+              setProgress((prev) => ({ ...prev, outroSeen: true }));
+            }}
+          />
+        </Suspense>
+        <OfflineIndicator />
+      </>
+    );
+  }
+
+  // CUTSCENE THEATER REPLAY: BOSS ENCOUNTER
+  const replayBossLevel =
+    replayBossChapterId !== null
+      ? ALL_LEVELS.find((l) => l.isBoss && l.chapterId === replayBossChapterId)
+      : null;
+  if (replayBossLevel && replayBossLevel.boss) {
+    return (
+      <>
+        <Suspense fallback={null}>
+          <BossCinematicVideo
+            mode="encounter"
+            boss={replayBossLevel.boss}
+            chapterId={replayBossLevel.chapterId}
+            onFinish={() => setReplayBossChapterId(null)}
           />
         </Suspense>
         <OfflineIndicator />
@@ -527,6 +735,12 @@ export default function App() {
           setActiveLevel(null);
           setShowIntro(true);
         }}
+        onReplayTour={() => {
+          setSettingsOpen(false);
+          setActiveLevel(null);
+          setScreen('LOBBY');
+          setTourOpen(true);
+        }}
         onRequestExit={handleConfirmExit}
         onClose={() => setSettingsOpen(false)}
       />
@@ -541,6 +755,11 @@ export default function App() {
             daily: prev.daily ? { ...prev.daily, specialEndingSeen: true } : prev.daily,
           }));
         }}
+      />
+      <InteractiveTourOverlay
+        open={tourOpen}
+        onSwitchScreen={handleTourScreenSwitch}
+        onComplete={handleCompleteTour}
       />
     </>
   );
@@ -591,6 +810,11 @@ export default function App() {
               }
             }}
             hasNextLevel={!!nextLvl}
+            onStartBab5Outro={() => {
+              setActiveLevel(null);
+              setProgress((prev) => ({ ...prev, outroSeen: true }));
+              setShowBab5Outro(true);
+            }}
             onNewPractice={() => setActiveLevel(generatePracticeLevel(practiceDifficulty))}
           />
         </Suspense>
@@ -635,11 +859,12 @@ export default function App() {
           </button>
 
           {/* Desktop Game Mode Tabs */}
-          <nav aria-label="Menu permainan" className="hidden md:flex items-center gap-1.5">
+          <nav aria-label="Menu permainan" className="hidden md:flex items-center gap-1">
             {(
               [
                 ['LOBBY', 'Lobi'],
                 ['MAP', 'Peta Bab'],
+                ['DAILY', 'Misi Harian'],
                 ['ARCADE', 'Latihan Acak'],
                 ['CODEX', 'Buku Saku'],
                 ['BADGES', 'Badge'],
@@ -652,13 +877,21 @@ export default function App() {
                   sound.playPickup();
                   setScreen(id);
                 }}
-                className={`min-h-[40px] px-3.5 rounded-xl text-sm font-extrabold transition-all whitespace-nowrap cursor-pointer ${
+                className={`relative min-h-[40px] px-3 rounded-xl text-sm font-extrabold transition-all whitespace-nowrap cursor-pointer ${
                   screen === id
                     ? 'bg-[#FEF08A] text-[#0D354C] shadow'
                     : 'text-[#E0F2FE] hover:text-white hover:bg-white/10'
                 }`}
               >
-                {label}
+                <span>{label}</span>
+                {id === 'DAILY' && dailyClaimableCount > 0 && (
+                  <span
+                    className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#FB7185] text-white text-[10px] font-mono font-extrabold"
+                    aria-label={`${dailyClaimableCount} misi siap diklaim`}
+                  >
+                    {dailyClaimableCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -696,16 +929,16 @@ export default function App() {
 
       {/* MAIN GAME SCREEN */}
       <main className={`relative z-10 flex-1 flex flex-col ${screen === 'LOBBY' ? 'pointer-events-none' : ''}`}>
-        {/* SCREEN 1: TROPICAL BEACH GAME LOBBY */}
+        {/* SCREEN 1: COMPACT NON-SCROLLING TROPICAL BEACH GAME LOBBY */}
         {screen === 'LOBBY' && (
-          <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+          <div className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 py-3 sm:py-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-7 items-center">
             {/* Left / Center Mobile Game Start Panel */}
             <section className="pointer-events-auto lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left">
               {/* Kibo Podium Card */}
-              <div className="w-full rounded-3xl game-panel p-4 sm:p-5 flex items-center gap-4 text-left">
+              <div className="w-full rounded-3xl game-panel p-3.5 sm:p-4 flex items-center gap-3.5 text-left">
                 <KiboAvatar
-                  size="lg"
-                  chapterId={selectedChapterId}
+                  size="md"
+                  chapterId={Math.min(5, selectedChapterId)}
                   mood={lobbyKiboLine ? 'excited' : 'happy'}
                   interactive
                   onFaintChange={(fainted) => {
@@ -724,17 +957,21 @@ export default function App() {
                   {(() => {
                     const activeLobbyText =
                       lobbyKiboLine ??
-                      getInitialLobbyKiboLine(selectedChapterId, completedCount, bossesDefeated);
+                      getInitialLobbyKiboLine(
+                        Math.min(5, selectedChapterId),
+                        completedCount,
+                        bossesDefeated
+                      );
                     return (
                       <div
                         key={activeLobbyText}
-                        className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3.5 py-2 shadow-sm speech-bubble-pop"
+                        className="relative mt-1 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3 py-1.5 shadow-sm speech-bubble-pop"
                       >
                         <span
                           aria-hidden="true"
-                          className="absolute -left-2 top-3.5 w-3.5 h-3.5 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                          className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
                         />
-                        <p className="relative z-10 text-sm sm:text-base font-semibold text-[#0D354C] leading-snug">
+                        <p className="relative z-10 text-xs sm:text-sm font-semibold text-[#0D354C] leading-snug line-clamp-2">
                           “{activeLobbyText}”
                         </p>
                       </div>
@@ -744,55 +981,75 @@ export default function App() {
               </div>
 
               {/* Main Friendly Game Title */}
-              <div className="mt-6">
-                <h1 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight text-[#0B3B56] leading-[1.06] text-balance drop-shadow-[0_2px_0_rgba(255,255,255,0.75)]">
+              <div className="mt-3.5 sm:mt-4">
+                <h1 className="font-display text-3xl sm:text-4xl lg:text-[42px] font-extrabold tracking-tight text-[#0B3B56] leading-[1.06] text-balance drop-shadow-[0_2px_0_rgba(255,255,255,0.75)]">
                   Timbangan Pindah Ruas
                 </h1>
-                <p className="mt-2 text-sm sm:text-base font-bold text-[#145374]">
-                  6 Bab · 120 Stage · 6 Bos Penjaga · Gratis & Offline
+                <p className="mt-1 text-xs sm:text-sm font-bold text-[#145374]">
+                  6 Bab · 120 Stage · 6 Bos Penjaga · Gratis &amp; Offline
                 </p>
               </div>
 
               {/* BIG CHUNKY PRIMARY PLAY BUTTON */}
-              <div className="mt-6 w-full max-w-md space-y-3">
+              <div className="mt-3.5 sm:mt-4 w-full max-w-lg space-y-2.5">
                 <button
                   type="button"
+                  data-tour="lobby-play"
                   onClick={() => {
                     sound.playPickup();
                     setActiveLevel(resumeLevel);
                   }}
-                  className="game-btn-gold w-full min-h-[60px] px-6 rounded-2xl flex items-center justify-between gap-3 cursor-pointer"
+                  className="game-btn-gold w-full min-h-[56px] px-5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-[#78350F]/15 flex items-center justify-center">
-                      <Play className="w-6 h-6 fill-current" aria-hidden="true" />
+                    <div className="w-9 h-9 rounded-xl bg-[#78350F]/15 flex items-center justify-center shrink-0">
+                      <Play className="w-5 h-5 fill-current" aria-hidden="true" />
                     </div>
                     <div className="text-left">
-                      <div className="font-display font-extrabold text-lg leading-tight">
+                      <div className="font-display font-extrabold text-base sm:text-lg leading-tight">
                         {completedCount > 0 ? 'LANJUT MAIN' : 'MULAI PETUALANGAN'}
                       </div>
                       <div className="text-xs font-bold opacity-85">
                         Bab {resumeLevel.chapterId} ·{' '}
                         {resumeLevel.isBoss
-                          ? resumeLevel.boss?.name
+                          ? resumeLevel.chapterId === 5
+                            ? 'Bos ???'
+                            : resumeLevel.boss?.name
                           : `Stage ${resumeLevel.levelNumber}: ${resumeLevel.title}`}
                       </div>
                     </div>
                   </div>
                 </button>
 
-                {/* 4 CHUNKY ANDROID MENU BUTTONS */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {/* 5 CHUNKY DEDICATED GAME MENU BUTTONS (NON-SCROLLING LOBBY) */}
+                <div data-tour="lobby-nav" className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       sound.playPickup();
                       setScreen('MAP');
                     }}
-                    className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+                    className="game-btn-wood min-h-[68px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Compass className="w-6 h-6 text-[#0284C7]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold whitespace-nowrap">Peta Bab</span>
+                    <Compass className="w-5 h-5 text-[#0284C7]" aria-hidden="true" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap">Peta Bab</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playPickup();
+                      setScreen('DAILY');
+                    }}
+                    className="relative game-btn-wood min-h-[68px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer"
+                  >
+                    {dailyClaimableCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-[#FB7185] ring-2 ring-white" />
+                    )}
+                    <CalendarCheck2 className="w-5 h-5 text-[#0EA5E9]" aria-hidden="true" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap">
+                      Misi ({dailyCompletedCount}/3)
+                    </span>
                   </button>
 
                   <button
@@ -801,10 +1058,10 @@ export default function App() {
                       sound.playPickup();
                       setScreen('ARCADE');
                     }}
-                    className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+                    className="game-btn-wood min-h-[68px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Shuffle className="w-6 h-6 text-[#D97706]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold whitespace-nowrap">Latihan</span>
+                    <Shuffle className="w-5 h-5 text-[#D97706]" aria-hidden="true" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap">Latihan</span>
                   </button>
 
                   <button
@@ -813,10 +1070,10 @@ export default function App() {
                       sound.playPickup();
                       setScreen('CODEX');
                     }}
-                    className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+                    className="game-btn-wood min-h-[68px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer"
                   >
-                    <BookOpen className="w-6 h-6 text-[#0D9488]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold whitespace-nowrap">Buku Saku</span>
+                    <BookOpen className="w-5 h-5 text-[#0D9488]" aria-hidden="true" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap">Buku Saku</span>
                   </button>
 
                   <button
@@ -825,21 +1082,21 @@ export default function App() {
                       sound.playPickup();
                       setScreen('BADGES');
                     }}
-                    className="game-btn-wood min-h-[76px] p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 cursor-pointer"
+                    className="col-span-2 sm:col-span-1 game-btn-wood min-h-[68px] p-2 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer"
                   >
-                    <Award className="w-6 h-6 text-[#B45309]" aria-hidden="true" />
-                    <span className="text-xs font-extrabold whitespace-nowrap">Badge</span>
+                    <Award className="w-5 h-5 text-[#B45309]" aria-hidden="true" />
+                    <span className="text-[11px] font-extrabold whitespace-nowrap">Badge</span>
                   </button>
                 </div>
 
-                <div className="flex justify-center lg:justify-start pt-1">
+                <div className="flex justify-center lg:justify-start">
                   <PWAInstallButton variant="banner" />
                 </div>
               </div>
             </section>
 
-            {/* Right: Interactive Board Showcase + Quick Chapter Strip */}
-            <section className="pointer-events-auto lg:col-span-6 space-y-4">
+            {/* Right: Interactive Board Showcase + Quick Chapter Strip (with Bab 6 Segera Hadir!) */}
+            <section className="pointer-events-auto lg:col-span-6 space-y-3.5">
               {(() => {
                 const LOBBY_RULES = [
                   { badge: '+3 ⇄ −3', hint: 'Tambah menyeberang jadi Kurang!', eq: 'x + 3 = 8  →  x = 8 − 3' },
@@ -849,7 +1106,7 @@ export default function App() {
                 ];
                 const activeRule = LOBBY_RULES[lobbyRuleIdx % LOBBY_RULES.length];
                 return (
-                  <div className="relative rounded-3xl overflow-hidden border-3 border-[#FFFFFF]/85 bg-[#E0F2FE] shadow-xl aspect-[16/10] group">
+                  <div className="relative rounded-3xl overflow-hidden border-3 border-[#FFFFFF]/85 bg-[#E0F2FE] shadow-xl aspect-[16/9] group">
                     {!heroImgFailed ? (
                       <img
                         src="/src/assets/images/hero_setara_board_1795079216335.jpg"
@@ -864,7 +1121,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Floating Animated Portal Badge */}
                     <div
                       className="anime-lobby-float pointer-events-none absolute top-3 left-3 rounded-xl bg-[#0D4A6B]/90 border border-[#7DD3FC]/70 text-white px-2.5 py-1.5 flex items-center gap-1.5 shadow-md"
                       style={{ animationDuration: '4.2s' }}
@@ -875,7 +1131,6 @@ export default function App() {
                       <span className="text-[11px] font-extrabold text-[#FEF08A]">Jembatan Ruas</span>
                     </div>
 
-                    {/* Interactive Tap-to-Flip Rule Demo Chip */}
                     <button
                       type="button"
                       onClick={() => {
@@ -884,7 +1139,7 @@ export default function App() {
                         setLobbyRuleIdx(nextIdx);
                         setLobbyKiboLine(`Rumus kilat: ${LOBBY_RULES[nextIdx].hint}`);
                       }}
-                      className="absolute bottom-3 left-3 right-3 rounded-2xl bg-[#0D354C]/90 border-2 border-[#FBBF24]/80 px-3 py-2 text-left flex items-center justify-between gap-2 shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
+                      className="absolute bottom-2.5 left-2.5 right-2.5 rounded-2xl bg-[#0D354C]/90 border-2 border-[#FBBF24]/80 px-3 py-2 text-left flex items-center justify-between gap-2 shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
                     >
                       <div className="min-w-0">
                         <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#FDE047]">
@@ -902,17 +1157,17 @@ export default function App() {
                 );
               })()}
 
-              {/* Quick Chapter Launch Grid */}
-              <div className="rounded-3xl game-panel p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-display font-extrabold text-sm text-[#0D354C]">
+              {/* Quick Chapter Launch Grid + Bab 6 Coming Soon Teaser */}
+              <div className="rounded-3xl game-panel p-3.5 sm:p-4">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="font-display font-extrabold text-xs sm:text-sm text-[#0D354C]">
                     Pilih Cepat Pulau Bab (20 Stage / Bab)
                   </span>
                   <span className="text-xs font-mono font-extrabold text-[#D97706] tabular-nums">
                     {totalStars}/{maxStars} ★
                   </span>
                 </div>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
                   {CHAPTERS.map((ch) => {
                     const doneInCh = ch.levels.filter((l) => progress.completed[l.id]).length;
                     const bossBeat = ch.levels.some((l) => l.isBoss && progress.completed[l.id]);
@@ -925,29 +1180,35 @@ export default function App() {
                           setSelectedChapterId(ch.id);
                           setScreen('MAP');
                         }}
-                        className={`min-h-[60px] rounded-2xl p-2 flex flex-col items-center justify-center border-2 transition-transform duration-200 hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer ${
+                        className={`min-h-[54px] rounded-2xl p-1.5 flex flex-col items-center justify-center border-2 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 cursor-pointer ${
                           bossBeat
                             ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
                             : 'bg-[#EBF8FF] border-[#BAE6FD] text-[#0D354C] hover:border-[#0284C7]'
                         }`}
                       >
-                        <span className="font-display font-extrabold text-sm">Bab {ch.id}</span>
-                        <span className="text-[11px] font-mono font-bold text-[#35637A] tabular-nums">
+                        <span className="font-display font-extrabold text-xs sm:text-sm">Bab {ch.id}</span>
+                        <span className="text-[10px] font-mono font-bold text-[#35637A] tabular-nums">
                           {doneInCh}/{ch.levels.length}
                         </span>
                       </button>
                     );
                   })}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playPickup();
+                      setSelectedChapterId(6);
+                      setScreen('MAP');
+                    }}
+                    className="min-h-[54px] rounded-2xl p-1.5 flex flex-col items-center justify-center border-2 border-[#22D3EE]/80 bg-gradient-to-b from-[#0F172A] to-[#1E293B] text-[#67E8F9] transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-95 cursor-pointer"
+                    title="Bab 6 Segera Hadir!"
+                  >
+                    <span className="font-display font-extrabold text-xs sm:text-sm">Bab 6</span>
+                    <span className="text-[10px] font-mono font-bold text-[#BAE6FD]">???</span>
+                  </button>
                 </div>
               </div>
-
-              {/* Daily Missions Compact Panel */}
-              <DailyMissionsCard
-                progress={progress}
-                onClaimMission={handleClaimDailyMission}
-                onWatchSpecialEnding={() => setSpecialEndingOpen(true)}
-                compact
-              />
             </section>
           </div>
         )}
@@ -958,30 +1219,103 @@ export default function App() {
             <TreasureMap
               chapters={CHAPTERS}
               activeChapter={activeChapter}
+              selectedChapterId={selectedChapterId}
               progress={progress}
               onSelectChapter={setSelectedChapterId}
               onSelectLevel={setActiveLevel}
+              onGoArcade={() => setScreen('ARCADE')}
             />
           </Suspense>
+        )}
+
+        {/* SCREEN 2B: DEDICATED DAILY MISSIONS MENU */}
+        {screen === 'DAILY' && (
+          <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5">
+            <div className="rounded-3xl game-panel p-4 sm:p-5 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                <KiboAvatar
+                  size="md"
+                  chapterId={Math.min(5, selectedChapterId)}
+                  mood="happy"
+                  animate
+                  interactive
+                  onInteract={(quip) => setDailyKiboLine(quip)}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold text-[#0284C7]">
+                    Tantangan Harian &amp; Streak 7 Hari
+                  </p>
+                  <h1 className="font-display text-xl sm:text-3xl font-extrabold text-[#0D354C]">
+                    Misi Harian Setara
+                  </h1>
+                  {(() => {
+                    const msg =
+                      dailyKiboLine ??
+                      'Selesaikan 3 misi harian untuk poin bonus, dan capai 7 hari beruntun untuk Ending Spesial Kibo!';
+                    return (
+                      <div
+                        key={msg}
+                        className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3 py-1.5 shadow-sm speech-bubble-pop"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                        />
+                        <p className="relative z-10 text-xs sm:text-sm font-semibold text-[#0D354C] leading-snug">
+                          “{msg}”
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            <DailyMissionsCard
+              progress={progress}
+              onClaimMission={handleClaimDailyMission}
+              onWatchSpecialEnding={() => setSpecialEndingOpen(true)}
+            />
+          </div>
         )}
 
         {/* SCREEN 3: PURE-RANDOM PROCEDURAL ARCADE PRACTICE MODE */}
         {screen === 'ARCADE' && (
           <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-6">
             <div className="rounded-3xl game-panel p-4 sm:p-5 flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3.5">
-                <KiboAvatar size="md" animate />
-                <div>
+              <div className="flex items-center gap-3.5 flex-1 min-w-[240px]">
+                <KiboAvatar
+                  size="md"
+                  animate
+                  interactive
+                  onInteract={(quip) => setArcadeKiboLine(quip)}
+                />
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-extrabold text-[#0284C7]">
                     Generator Soal Random Otomatis · 100% Acak
                   </p>
-                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
+                  <h1 className="font-display text-xl sm:text-3xl font-extrabold text-[#0D354C]">
                     Arena Latihan Acak
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#35637A]">
-                    Setiap soal dibuat otomatis secara acak oleh mesin matematika — tidak mengambil
-                    dari stage!
-                  </p>
+                  {(() => {
+                    const msg =
+                      arcadeKiboLine ??
+                      'Setiap soal dibuat otomatis secara acak oleh mesin matematika — ayo asah jurusmu!';
+                    return (
+                      <div
+                        key={msg}
+                        className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3 py-1.5 shadow-sm speech-bubble-pop"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                        />
+                        <p className="relative z-10 text-xs sm:text-sm font-semibold text-[#0D354C] leading-snug">
+                          “{msg}”
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="font-mono text-sm font-extrabold text-[#0284C7] tabular-nums">
@@ -989,7 +1323,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div data-tour="arcade-tiers" className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {(
                 [
                   {
@@ -1049,34 +1383,54 @@ export default function App() {
           </Suspense>
         )}
 
-        {/* SCREEN 5: DEDICATED ACHIEVEMENT BADGES MENU */}
+        {/* SCREEN 5: DEDICATED ACHIEVEMENT BADGES, D3 STATS & CUTSCENE MENU */}
         {screen === 'BADGES' && (
           <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-8 space-y-5">
             <div className="rounded-3xl game-panel p-4 sm:p-5 flex items-center justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3.5">
-                <KiboAvatar size="md" chapterId={selectedChapterId} mood="excited" animate />
-                <div>
+              <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                <KiboAvatar
+                  size="md"
+                  chapterId={Math.min(5, selectedChapterId)}
+                  mood="excited"
+                  animate
+                  interactive
+                  onInteract={(quip) => setBadgesKiboLine(quip)}
+                />
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-extrabold text-[#B45309]">
-                    Koleksi Prestasi Petualangan
+                    Koleksi Prestasi, Statistik D3 &amp; Cutscene
                   </p>
-                  <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
-                    Badge Pencapaian
+                  <h1 className="font-display text-xl sm:text-3xl font-extrabold text-[#0D354C]">
+                    Badge, Stats &amp; Cutscene
                   </h1>
-                  <p className="text-xs sm:text-sm text-[#35637A]">
-                    Kumpulkan semua lencana spesial dari setiap tantangan dan kemenanganmu bersama Kibo!
-                  </p>
+                  {(() => {
+                    const msg =
+                      badgesKiboLine ??
+                      'Lihat lencana pencapaianmu, grafik kemajuanmu, atau putar ulang cutscene seru di sini!';
+                    return (
+                      <div
+                        key={msg}
+                        className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3 py-1.5 shadow-sm speech-bubble-pop"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                        />
+                        <p className="relative z-10 text-xs sm:text-sm font-semibold text-[#0D354C] leading-snug">
+                          “{msg}”
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
 
-            <DailyMissionsCard
-              progress={progress}
-              onClaimMission={handleClaimDailyMission}
-              onWatchSpecialEnding={() => setSpecialEndingOpen(true)}
-            />
-
             <Suspense fallback={null}>
-              <ProfileBadgesCard progress={progress} />
+              <ProfileBadgesCard
+                progress={progress}
+                onPlayCutscene={handlePlayCutscene}
+              />
             </Suspense>
           </div>
         )}
@@ -1087,13 +1441,14 @@ export default function App() {
         aria-label="Navigasi game"
         className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0D4A6B]/98 border-t-2 border-[#7DD3FC]/55 pb-safe"
       >
-        <div className="grid grid-cols-5 h-15">
+        <div className="grid grid-cols-6 h-15">
           {(
             [
               { id: 'LOBBY' as GameScreen, label: 'Lobi', Icon: Home },
               { id: 'MAP' as GameScreen, label: 'Peta', Icon: Compass },
+              { id: 'DAILY' as GameScreen, label: 'Misi', Icon: CalendarCheck2 },
               { id: 'ARCADE' as GameScreen, label: 'Latihan', Icon: Shuffle },
-              { id: 'CODEX' as GameScreen, label: 'Buku Saku', Icon: BookOpen },
+              { id: 'CODEX' as GameScreen, label: 'Saku', Icon: BookOpen },
               { id: 'BADGES' as GameScreen, label: 'Badge', Icon: Award },
             ]
           ).map(({ id, label, Icon }) => {
@@ -1106,11 +1461,14 @@ export default function App() {
                   sound.playPickup();
                   setScreen(id);
                 }}
-                className={`flex flex-col items-center justify-center gap-0.5 min-h-[46px] transition-colors cursor-pointer ${
+                className={`relative flex flex-col items-center justify-center gap-0.5 min-h-[46px] transition-colors cursor-pointer ${
                   active ? 'text-[#FEF08A]' : 'text-[#BAE6FD]'
                 }`}
               >
-                <Icon className={`w-5 h-5 ${active ? 'stroke-[2.5]' : 'stroke-[1.9]'}`} aria-hidden="true" />
+                {id === 'DAILY' && dailyClaimableCount > 0 && (
+                  <span className="absolute top-1.5 right-2.5 w-2 h-2 rounded-full bg-[#FB7185] ring-1 ring-white" />
+                )}
+                <Icon className={`w-4.5 h-4.5 ${active ? 'stroke-[2.5]' : 'stroke-[1.9]'}`} aria-hidden="true" />
                 <span className="text-[10px] font-extrabold tracking-tight whitespace-nowrap">{label}</span>
               </button>
             );

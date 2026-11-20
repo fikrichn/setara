@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Compass, Crown, Lock, Navigation, Star } from 'lucide-react';
+import { HelpCircle, ArrowRight, Compass, Crown, Lock, Navigation, Sparkles, Star } from 'lucide-react';
 import { formatEquation } from '../game/algebraEngine';
 import { ALL_LEVELS } from '../game/levels';
 import { sound } from '../game/sound';
 import { ChapterDef, LevelDef, ProgressStore } from '../game/types';
-import { AnimatedBoss } from './AnimatedBoss';
+import { AnimatedBoss, KiboSilhouetteBoss } from './AnimatedBoss';
 import { AnimatedKibo } from './AnimatedKibo';
 import { BeachEasterEggs } from './BeachEasterEggs';
 
 interface TreasureMapProps {
   chapters: ChapterDef[];
   activeChapter: ChapterDef;
+  selectedChapterId?: number;
   progress: ProgressStore;
   onSelectChapter: (chapterId: number) => void;
   onSelectLevel: (level: LevelDef) => void;
+  onGoArcade?: () => void;
 }
 
 const CHAPTER_FISH_COLORS: Record<number, { body: string; fin: string; stripe: string }> = {
@@ -142,10 +144,14 @@ const TREASURE_PATH_D = [
 export const TreasureMap: React.FC<TreasureMapProps> = ({
   chapters,
   activeChapter,
+  selectedChapterId,
   progress,
   onSelectChapter,
   onSelectLevel,
+  onGoArcade,
 }) => {
+  const isBab6ComingSoon = selectedChapterId === 6;
+  const effectiveChapterId = isBab6ComingSoon ? 6 : activeChapter.id;
   const [kiboMapQuip, setKiboMapQuip] = useState<string | null>(null);
   const [lockedSuggestion, setLockedSuggestion] = useState<{
     clicked: LevelDef;
@@ -153,18 +159,22 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
   } | null>(null);
   const [islandSailBanner, setIslandSailBanner] = useState<string | null>(null);
   const [sailDirection, setSailDirection] = useState<'next' | 'prev'>('next');
-  const prevChapterRef = useRef<number>(activeChapter.id);
+  const prevChapterRef = useRef<number>(effectiveChapterId);
   const sailTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (prevChapterRef.current !== activeChapter.id) {
-      setSailDirection(activeChapter.id > prevChapterRef.current ? 'next' : 'prev');
-      prevChapterRef.current = activeChapter.id;
-      setIslandSailBanner(`Berlayar ke Pulau Bab ${activeChapter.id} · ${activeChapter.title}`);
+    if (prevChapterRef.current !== effectiveChapterId) {
+      setSailDirection(effectiveChapterId > prevChapterRef.current ? 'next' : 'prev');
+      prevChapterRef.current = effectiveChapterId;
+      setIslandSailBanner(
+        isBab6ComingSoon
+          ? 'Meneropong Cakrawala Bab 6 · Segera Hadir!'
+          : `Berlayar ke Pulau Bab ${activeChapter.id} · ${activeChapter.title}`
+      );
       if (sailTimerRef.current) window.clearTimeout(sailTimerRef.current);
       sailTimerRef.current = window.setTimeout(() => setIslandSailBanner(null), 1150);
     }
-  }, [activeChapter.id, activeChapter.title]);
+  }, [effectiveChapterId, isBab6ComingSoon, activeChapter.id, activeChapter.title]);
 
   useEffect(() => {
     return () => {
@@ -222,7 +232,7 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
       {/* CHAPTER SELECTOR WITH LIVELY SWIMMING FISH ICONS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1.5">
         {chapters.map((ch) => {
-          const isActive = ch.id === activeChapter.id;
+          const isActive = !isBab6ComingSoon && ch.id === activeChapter.id;
           const done = ch.levels.filter((l) => progress.completed[l.id]).length;
           const bossWon = ch.levels.some((l) => l.isBoss && progress.completed[l.id]);
           const chUnlocked = ch.levels.length > 0 && unlockedLevelIds.has(ch.levels[0].id);
@@ -261,12 +271,44 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
             </button>
           );
         })}
+
+        {/* BAB 6 COMING SOON TAB */}
+        <button
+          type="button"
+          onClick={() => {
+            sound.playPickup();
+            setKiboMapQuip(null);
+            setLockedSuggestion(null);
+            onSelectChapter(6);
+          }}
+          className={`min-h-[58px] px-3.5 rounded-2xl flex items-center gap-2 shrink-0 transition-all cursor-pointer ${
+            isBab6ComingSoon
+              ? 'bg-gradient-to-b from-[#1E293B] to-[#0F172A] text-[#67E8F9] border-2 border-[#22D3EE] shadow-lg'
+              : 'game-btn-wood opacity-90'
+          }`}
+        >
+          <div className="w-7 h-7 rounded-lg bg-[#0F172A] border border-[#22D3EE]/70 flex items-center justify-center shrink-0 text-[#67E8F9] font-display font-extrabold text-sm">
+            ?
+          </div>
+          <div className="flex flex-col items-start justify-center">
+            <div className="font-display font-extrabold text-sm whitespace-nowrap">
+              Bab 6
+            </div>
+            <span
+              className={`text-[10px] font-extrabold whitespace-nowrap ${
+                isBab6ComingSoon ? 'text-[#BAE6FD]' : 'text-[#7C2D12]'
+              }`}
+            >
+              Segera Hadir
+            </span>
+          </div>
+        </button>
       </div>
 
       {/* ISLAND-HOPPING TRANSITION TOAST */}
       {islandSailBanner && (
         <div
-          key={`sail-${activeChapter.id}`}
+          key={`sail-${effectiveChapterId}`}
           role="status"
           aria-live="polite"
           className="pointer-events-none flex items-center justify-center"
@@ -278,9 +320,116 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
         </div>
       )}
 
-      {/* ANTIQUE TREASURE MAP PARCHMENT PAPER WITH ISLAND-HOPPING TRANSITION */}
+      {/* BAB 6 COMING SOON MYSTERIOUS SHARK RIVAL PANEL */}
+      {isBab6ComingSoon ? (
+        <section
+          key="bab-6-coming-soon"
+          data-tour="map-trail"
+          className={`relative rounded-3xl overflow-hidden p-5 sm:p-8 bg-gradient-to-br from-[#0B172A] via-[#13294B] to-[#081C2E] border-3 border-[#22D3EE]/70 text-white shadow-2xl ${
+            sailDirection === 'next' ? 'island-sail-next' : 'island-sail-prev'
+          }`}
+        >
+          <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+            <div className="flex flex-col items-center gap-3 shrink-0">
+              <KiboSilhouetteBoss
+                size="xl"
+                interactive
+                onTap={() =>
+                  setKiboMapQuip(
+                    'Hii?! Siluet itu gerak! Siripnya tajam sekali... jangan-jangan dia hiu penantang di Bab 6 nanti!'
+                  )
+                }
+              />
+              <span className="font-mono text-xs font-extrabold tracking-widest uppercase text-[#67E8F9]">
+                Bos ??? · Ketuk Siluet
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0 text-center md:text-left space-y-3">
+              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#FEF08A]">
+                <HelpCircle className="w-4 h-4 text-[#22D3EE]" aria-hidden="true" />
+                <span>Bab 6 · Segera Hadir di Update Berikutnya</span>
+              </div>
+
+              <h1 className="font-display text-2xl sm:text-4xl font-extrabold text-white leading-tight">
+                Palung Bayangan · Siapa Hiu Misterius Ini?
+              </h1>
+
+              <div className="flex items-start gap-3 text-left">
+                <AnimatedKibo
+                  size="sm"
+                  mood="thinking"
+                  interactive
+                  onInteract={(q) => setKiboMapQuip(q)}
+                  className="shrink-0 border-2 border-[#38BDF8]"
+                />
+                <div className="relative flex-1 rounded-2xl bg-[#0F2A44]/95 border-2 border-[#38BDF8]/70 px-3.5 py-2.5 text-xs sm:text-sm text-[#E0F2FE] speech-bubble-pop">
+                  <span
+                    aria-hidden="true"
+                    className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#0F2A44] border-l-2 border-b-2 border-[#38BDF8]/70"
+                  />
+                  <span className="relative z-10 font-semibold">
+                    <strong className="text-[#38BDF8]">Kibo:</strong> “
+                    {kiboMapQuip ??
+                      'Aduh, siluet di peta itu mirip sekali dengan Kibo! Siapkan jurus pindah ruasmu untuk Bab 6 yang segera hadir nanti ya!'}
+                    ”
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-left">
+                <div className="rounded-2xl bg-white/10 border border-white/15 p-3">
+                  <div className="text-xs font-extrabold text-[#67E8F9] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>20 Stage Petualangan Baru</span>
+                  </div>
+                  <p className="text-[11px] text-[#BAE6FD] mt-1">
+                    Teka-teki aljabar tingkat lanjut di kedalaman laut misterius.
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white/10 border border-white/15 p-3">
+                  <div className="text-xs font-extrabold text-[#FEF08A] flex items-center gap-1.5">
+                    <Crown className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Rival Bayangan Mirip Kibo</span>
+                  </div>
+                  <p className="text-[11px] text-[#BAE6FD] mt-1">
+                    Bos baru dengan mekanik penuh kejutan menanti di Stage 20!
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playPickup();
+                    onSelectChapter(5);
+                  }}
+                  className="game-btn-wood min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer"
+                >
+                  Kembali ke Bab 5
+                </button>
+                {onGoArcade && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playPickup();
+                      onGoArcade();
+                    }}
+                    className="game-btn-gold min-h-[44px] px-4 rounded-xl text-xs sm:text-sm font-extrabold cursor-pointer"
+                  >
+                    Latihan Acak Sambil Menunggu
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+      /* ANTIQUE TREASURE MAP PARCHMENT PAPER WITH ISLAND-HOPPING TRANSITION */
       <section
         key={activeChapter.id}
+        data-tour="map-trail"
         className={`relative rounded-3xl treasure-parchment overflow-hidden p-4 sm:p-6 ${
           sailDirection === 'next' ? 'island-sail-next' : 'island-sail-prev'
         }`}
@@ -387,9 +536,13 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
                 return (
                   <div
                     key={mapMsg}
-                    className="relative mt-1 rounded-xl bg-[#FFFDF4]/80 border border-[#B47B38]/35 px-2.5 py-1 text-xs sm:text-sm text-[#78350F] font-medium speech-bubble-pop"
+                    className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#FFFDF4]/95 border-2 border-[#B47B38]/55 px-3 py-1.5 text-xs sm:text-sm text-[#78350F] font-semibold shadow-sm speech-bubble-pop"
                   >
-                    {mapMsg}
+                    <span
+                      aria-hidden="true"
+                      className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#FFFDF4] border-l-2 border-b-2 border-[#B47B38]/55"
+                    />
+                    <span className="relative z-10">{mapMsg}</span>
                   </div>
                 );
               })()}
@@ -723,6 +876,7 @@ export const TreasureMap: React.FC<TreasureMapProps> = ({
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 };

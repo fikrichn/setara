@@ -174,19 +174,41 @@ export const PocketGuide: React.FC<PocketGuideProps> = ({ onStartChapter }) => {
   const currentStep = selectedExample.steps[opStepIdx];
   const isLastStep = opStepIdx >= selectedExample.steps.length - 1;
 
+  const [kiboTipLine, setKiboTipLine] = useState<string | null>(null);
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5 sm:py-7 space-y-6">
       <div className="rounded-3xl game-panel p-4 sm:p-5 flex items-center gap-4">
-        <KiboAvatar size="md" animate />
-        <div>
+        <KiboAvatar
+          size="md"
+          animate
+          interactive
+          onInteract={(quip) => setKiboTipLine(quip)}
+        />
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold text-[#0284C7]">Buku Saku Kibo</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
+          <h1 className="font-display text-xl sm:text-3xl font-extrabold text-[#0D354C]">
             4 Jurus Pindah Ruas
           </h1>
-          <p className="mt-0.5 text-xs sm:text-sm text-[#35637A]">
-            Tanda <strong className="text-[#D97706]">=</strong> seperti jembatan timbangan pantai.
-            Buat <strong className="text-[#D97706]">x</strong> (atau Peti Pusaka) berdiri sendirian!
-          </p>
+          {(() => {
+            const msg =
+              kiboTipLine ??
+              'Tanda = seperti jembatan timbangan pantai. Buat x (atau Peti Pusaka) berdiri sendirian!';
+            return (
+              <div
+                key={msg}
+                className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3 py-1.5 shadow-sm speech-bubble-pop"
+              >
+                <span
+                  aria-hidden="true"
+                  className="absolute -left-2 top-3 w-3 h-3 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                />
+                <p className="relative z-10 text-xs sm:text-sm font-semibold text-[#0D354C] leading-snug">
+                  “{msg}”
+                </p>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

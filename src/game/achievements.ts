@@ -1,4 +1,4 @@
-import { ALL_LEVELS } from './levels';
+import { ALL_LEVELS, CHAPTERS } from './levels';
 import { ProgressStore } from './types';
 
 export type BadgeIconKey =
@@ -22,6 +22,7 @@ export interface BadgeDef {
   icon: BadgeIconKey;
   tone: BadgeTone;
   target: number;
+  isSuper?: boolean;
   getCurrent: (progress: ProgressStore) => number;
 }
 
@@ -32,6 +33,19 @@ export interface EvaluatedBadge extends BadgeDef {
 }
 
 const BOSS_IDS = ALL_LEVELS.filter((l) => l.isBoss).map((l) => l.id);
+
+const CHAPTER_BADGE_TONES: BadgeTone[] = ['sky', 'teal', 'emerald', 'gold', 'coral', 'violet'];
+
+const CHAPTER_THREE_STAR_BADGES: BadgeDef[] = CHAPTERS.map((ch, idx) => ({
+  id: `bintang3_bab_${ch.id}`,
+  title: `Bintang 3 · Bab ${ch.id}`,
+  description: `Raih 3 bintang penuh di semua ${ch.levels.length} stage Bab ${ch.id} (${ch.title})`,
+  kiboPraise: `Kilau sempurna! Seluruh ${ch.levels.length} stage di Bab ${ch.id} tuntas 3 bintang tanpa celah!`,
+  icon: 'star',
+  tone: CHAPTER_BADGE_TONES[idx % CHAPTER_BADGE_TONES.length],
+  target: ch.levels.length,
+  getCurrent: (p) => ch.levels.filter((l) => (p.completed[l.id]?.stars ?? 0) === 3).length,
+}));
 
 export const ACHIEVEMENT_BADGES: BadgeDef[] = [
   {
@@ -144,6 +158,19 @@ export const ACHIEVEMENT_BADGES: BadgeDef[] = [
     tone: 'violet',
     target: BOSS_IDS.length,
     getCurrent: (p) => BOSS_IDS.filter((id) => Boolean(p.completed[id])).length,
+  },
+  ...CHAPTER_THREE_STAR_BADGES,
+  {
+    id: 'super_bintang3_semua_bab',
+    title: 'Super Mahkota 3★ Samudra',
+    description: `BADGE SUPER! Raih 3 bintang sempurna di seluruh ${CHAPTERS.length} Bab (${ALL_LEVELS.length} stage)`,
+    kiboPraise: 'LEGENDARIS! 3 BINTANG DI SEMUA 6 BAB (120 STAGE)! Kamu Juara Mutlak Pantai Setara!',
+    icon: 'crown',
+    tone: 'gold',
+    target: CHAPTERS.length,
+    isSuper: true,
+    getCurrent: (p) =>
+      CHAPTERS.filter((ch) => ch.levels.every((l) => (p.completed[l.id]?.stars ?? 0) === 3)).length,
   },
 ];
 
