@@ -53,4 +53,4 @@ setara/
 
 ## License
 
-Copyright © 2026 [fikrichn](https://github.com). All rights reserved.
+Copyright © 2026 [fikrichn](https://github.com/fikrichn). All rights reserved.
