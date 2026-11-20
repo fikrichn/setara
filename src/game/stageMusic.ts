@@ -1,6 +1,167 @@
 // Cheerful Tropical Beach & Lagoon Stage Music Synthesizer (100% Web Audio API, offline APK-ready)
 // Warm coastal marimba melody + sunny ukulele chords + gentle island bass + light beach shaker.
-// Designed so music is always active (minimum volume floor 15%, controlled via Settings slider).
+// Theme 0 (Lobby & Bab 0) keeps the original signature theme; Themes 1..5 provide unique melodies per chapter.
+
+interface StageThemeTrack {
+  bpm: number;
+  melody: number[]; // 32 eighth-note MIDI steps
+  bass: number[]; // 32 eighth-note MIDI steps
+  chords: number[][]; // 4 bars
+  melodyWave?: OscillatorType;
+  shakerFreq?: number;
+}
+
+const STAGE_THEMES: Record<number, StageThemeTrack> = {
+  // Bab 0 & Lobby — EXACT original signature theme song
+  0: {
+    bpm: 108,
+    melody: [
+      72, 0, 76, 79,  81, 0, 79, 76,
+      74, 0, 79, 74,  71, 0, 74, 0,
+      72, 0, 76, 79,  84, 0, 81, 79,
+      77, 76, 74, 72, 74, 0, 76, 0,
+    ],
+    bass: [
+      48, 0, 0, 48,   55, 0, 48, 0,
+      43, 0, 0, 43,   50, 0, 43, 0,
+      45, 0, 0, 45,   52, 0, 45, 0,
+      41, 0, 43, 0,   48, 0, 43, 0,
+    ],
+    chords: [
+      [60, 64, 67], // C
+      [59, 62, 67], // G
+      [57, 60, 64], // Am
+      [57, 60, 65], // F
+    ],
+    melodyWave: 'sine',
+    shakerFreq: 5200,
+  },
+
+  // Bab 1: Pulau Batu Angka — Upbeat G-Major Calypso Island Groove
+  1: {
+    bpm: 114,
+    melody: [
+      79, 0, 83, 86,  83, 0, 81, 79,
+      78, 0, 81, 86,  81, 0, 79, 78,
+      76, 0, 79, 83,  86, 0, 83, 79,
+      81, 79, 78, 76, 79, 0, 83, 0,
+    ],
+    bass: [
+      43, 0, 0, 43,   50, 0, 43, 0,
+      50, 0, 0, 50,   45, 0, 50, 0,
+      40, 0, 0, 40,   47, 0, 40, 0,
+      48, 0, 50, 0,   43, 0, 50, 0,
+    ],
+    chords: [
+      [62, 67, 71], // G
+      [62, 66, 69], // D
+      [59, 64, 67], // Em
+      [60, 64, 67], // C
+    ],
+    melodyWave: 'sine',
+    shakerFreq: 5600,
+  },
+
+  // Bab 2: Teluk Tambah & Kurang — Sparkling F-Major Treasure Cove
+  2: {
+    bpm: 112,
+    melody: [
+      77, 81, 0, 84,  86, 0, 84, 81,
+      79, 0, 84, 79,  76, 0, 79, 0,
+      74, 77, 0, 81,  84, 0, 82, 79,
+      77, 0, 76, 74,  77, 0, 81, 0,
+    ],
+    bass: [
+      41, 0, 48, 0,   41, 0, 45, 0,
+      48, 0, 43, 0,   48, 0, 43, 0,
+      50, 0, 45, 0,   46, 0, 41, 0,
+      48, 0, 43, 0,   41, 0, 48, 0,
+    ],
+    chords: [
+      [60, 65, 69], // F
+      [60, 64, 67], // C
+      [57, 62, 65], // Dm
+      [58, 62, 65], // Bb
+    ],
+    melodyWave: 'triangle',
+    shakerFreq: 5900,
+  },
+
+  // Bab 3: Laguna Suku x — Breezy D-Major Misty Lagoon
+  3: {
+    bpm: 104,
+    melody: [
+      74, 0, 78, 81,  86, 0, 81, 78,
+      76, 0, 81, 85,  81, 0, 76, 0,
+      74, 0, 78, 83,  81, 0, 79, 78,
+      76, 74, 73, 76, 74, 0, 78, 0,
+    ],
+    bass: [
+      50, 0, 0, 50,   45, 0, 50, 0,
+      45, 0, 0, 45,   52, 0, 45, 0,
+      47, 0, 0, 47,   43, 0, 47, 0,
+      45, 0, 49, 0,   50, 0, 45, 0,
+    ],
+    chords: [
+      [62, 66, 69], // D
+      [61, 64, 69], // A
+      [59, 62, 66], // Bm
+      [59, 62, 67], // G
+    ],
+    melodyWave: 'sine',
+    shakerFreq: 4700,
+  },
+
+  // Bab 4: Karang Kali & Bagi — Energetic A-Minor / C Sea Voyager
+  4: {
+    bpm: 118,
+    melody: [
+      81, 0, 84, 88,  86, 84, 83, 81,
+      79, 0, 83, 86,  84, 0, 83, 79,
+      77, 0, 81, 84,  88, 0, 84, 81,
+      79, 77, 76, 79, 81, 0, 76, 0,
+    ],
+    bass: [
+      45, 0, 52, 45,  45, 0, 48, 0,
+      43, 0, 50, 43,  48, 0, 43, 0,
+      41, 0, 48, 41,  45, 0, 41, 0,
+      43, 0, 47, 0,   45, 0, 52, 0,
+    ],
+    chords: [
+      [60, 64, 69], // Am
+      [59, 62, 67], // G
+      [60, 65, 69], // F
+      [60, 64, 67], // C
+    ],
+    melodyWave: 'triangle',
+    shakerFreq: 6200,
+  },
+
+  // Bab 5: Samudra Aljabar — Shimmering E-Minor Deep Ocean Quest
+  5: {
+    bpm: 116,
+    melody: [
+      76, 0, 79, 83,  88, 0, 86, 83,
+      84, 0, 83, 79,  81, 0, 79, 76,
+      74, 0, 78, 81,  86, 0, 83, 81,
+      79, 78, 76, 74, 76, 0, 83, 0,
+    ],
+    bass: [
+      40, 0, 47, 0,   40, 0, 43, 0,
+      48, 0, 43, 0,   45, 0, 48, 0,
+      50, 0, 45, 0,   43, 0, 47, 0,
+      47, 0, 45, 0,   40, 0, 47, 0,
+    ],
+    chords: [
+      [59, 64, 67], // Em
+      [60, 64, 67], // C
+      [62, 66, 69], // D
+      [59, 62, 67], // G
+    ],
+    melodyWave: 'sine',
+    shakerFreq: 6400,
+  },
+};
 
 class StageIslandMusic {
   private ctx: AudioContext | null = null;
@@ -11,30 +172,7 @@ class StageIslandMusic {
   private nextNoteTime = 0;
   private running = false;
   private volume = 0.7; // Clamped to [0.15, 1.0]
-
-  // Happy sunny pentatonic/C-major coastal marimba melody (32 eighth-note steps = 4 bars)
-  private readonly melody = [
-    72, 0, 76, 79,  81, 0, 79, 76,
-    74, 0, 79, 74,  71, 0, 74, 0,
-    72, 0, 76, 79,  84, 0, 81, 79,
-    77, 76, 74, 72, 74, 0, 76, 0,
-  ];
-
-  // Warm bouncy island marimba bass (C3=48, G2=43, A2=45, F2=41)
-  private readonly bass = [
-    48, 0, 0, 48,   55, 0, 48, 0,
-    43, 0, 0, 43,   50, 0, 43, 0,
-    45, 0, 0, 45,   52, 0, 45, 0,
-    41, 0, 43, 0,   48, 0, 43, 0,
-  ];
-
-  // Gentle ukulele chord arpeggios (C, G, Am, F)
-  private readonly chords: number[][] = [
-    [60, 64, 67], // C
-    [59, 62, 67], // G
-    [57, 60, 64], // Am
-    [57, 60, 65], // F
-  ];
+  private themeId = 0;
 
   private midiToFreq(midi: number): number {
     return 440 * Math.pow(2, (midi - 69) / 12);
@@ -42,6 +180,10 @@ class StageIslandMusic {
 
   private getTargetGain(): number {
     return Math.max(0.15, Math.min(1, this.volume)) * 0.28;
+  }
+
+  private getActiveTrack(): StageThemeTrack {
+    return STAGE_THEMES[this.themeId] ?? STAGE_THEMES[0];
   }
 
   private ensureAudio(): AudioContext | null {
@@ -72,13 +214,13 @@ class StageIslandMusic {
     return this.ctx;
   }
 
-  private triggerMarimba(time: number, midi: number, amp = 0.24) {
+  private triggerMarimba(time: number, midi: number, amp = 0.24, wave: OscillatorType = 'sine') {
     const ctx = this.ctx;
     if (!ctx || !this.masterGain) return;
     const freq = this.midiToFreq(midi);
 
     const osc = ctx.createOscillator();
-    osc.type = 'sine';
+    osc.type = wave;
     osc.frequency.setValueAtTime(freq, time);
 
     // Subtle wooden overtone
@@ -152,7 +294,7 @@ class StageIslandMusic {
     osc.stop(time + 0.34);
   }
 
-  private triggerShaker(time: number, accent: boolean) {
+  private triggerShaker(time: number, accent: boolean, freq = 5200) {
     const ctx = this.ctx;
     if (!ctx || !this.masterGain || !this.noiseBuffer) return;
 
@@ -161,7 +303,7 @@ class StageIslandMusic {
 
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(5200, time);
+    bp.frequency.setValueAtTime(freq, time);
     bp.Q.setValueAtTime(1.4, time);
 
     const gain = ctx.createGain();
@@ -176,37 +318,38 @@ class StageIslandMusic {
   }
 
   private scheduleStep(stepIdx: number, time: number) {
+    const track = this.getActiveTrack();
     const idx = stepIdx % 32;
     const bar = Math.floor(idx / 8); // 4 bars of 8 eighth-notes
     const sub = idx % 8;
 
-    const mel = this.melody[idx];
+    const mel = track.melody[idx];
     if (mel > 0) {
-      this.triggerMarimba(time, mel, 0.24);
+      this.triggerMarimba(time, mel, 0.24, track.melodyWave ?? 'sine');
     }
 
-    const b = this.bass[idx];
+    const b = track.bass[idx];
     if (b > 0) {
       this.triggerBass(time, b);
     }
 
     // Island off-beat ukulele strums
     if (sub === 0 || sub === 3 || sub === 6) {
-      this.triggerUkuleleChord(time, this.chords[bar]);
+      this.triggerUkuleleChord(time, track.chords[bar]);
     }
 
     // Light coastal shaker pulse
-    this.triggerShaker(time, sub % 2 === 1);
+    this.triggerShaker(time, sub % 2 === 1, track.shakerFreq ?? 5200);
   }
 
   private scheduler = () => {
     const ctx = this.ctx;
     if (!this.running || !ctx) return;
 
-    const bpm = 108;
+    const bpm = this.getActiveTrack().bpm;
     const secondsPer8th = 60 / bpm / 2;
 
-    while (this.nextNoteTime < ctx.currentTime + 0.14) {
+    while (this.nextNoteTime < ctx.currentTime + 0.16) {
       this.scheduleStep(this.step, this.nextNoteTime);
       this.nextNoteTime += secondsPer8th;
       this.step += 1;
@@ -222,7 +365,21 @@ class StageIslandMusic {
     }
   }
 
-  start() {
+  setTheme(themeId: number) {
+    const normalized = STAGE_THEMES[themeId] ? themeId : 0;
+    if (this.themeId !== normalized) {
+      this.themeId = normalized;
+      this.step = 0;
+      if (this.ctx) {
+        this.nextNoteTime = Math.max(this.nextNoteTime, this.ctx.currentTime + 0.04);
+      }
+    }
+  }
+
+  start(themeId?: number) {
+    if (typeof themeId === 'number') {
+      this.setTheme(themeId);
+    }
     const ctx = this.ensureAudio();
     if (!ctx) return;
 
@@ -236,7 +393,7 @@ class StageIslandMusic {
     this.running = true;
     this.step = 0;
     this.nextNoteTime = ctx.currentTime + 0.06;
-    this.timerId = window.setInterval(this.scheduler, 35);
+    this.timerId = window.setInterval(this.scheduler, 50);
   }
 
   stop() {

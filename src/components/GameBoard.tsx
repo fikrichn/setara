@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -13,8 +13,10 @@ import {
   Settings,
   Sparkles,
   Star,
+  Timer,
   Undo2,
   X,
+  Zap,
 } from 'lucide-react';
 import {
   canCombineTerms,
@@ -32,6 +34,7 @@ import {
   transposeDenominator,
   transposeTerm,
 } from '../game/algebraEngine';
+import { isRestTime } from '../game/kiboDialogues';
 import { phonkMusic } from '../game/phonkMusic';
 import { sound } from '../game/sound';
 import { stageMusic } from '../game/stageMusic';
@@ -54,7 +57,12 @@ import {
   TileCardFace,
 } from './AlgebraTile';
 import { BeachBackdrop } from './BeachBackdrop';
-import { BossCinematicMode, BossCinematicVideo } from './BossCinematicVideo';
+import { BeachEasterEggs } from './BeachEasterEggs';
+import type { BossCinematicMode } from './BossCinematicVideo';
+
+const LazyBossCinematicVideo = lazy(() =>
+  import('./BossCinematicVideo').then((m) => ({ default: m.BossCinematicVideo }))
+);
 import {
   BossArenaBanner,
   BossDefeatModal,
@@ -67,13 +75,21 @@ import {
 
 interface GameBoardProps {
   level: LevelDef;
+  speedRunEnabled?: boolean;
+  onToggleSpeedRun?: () => void;
   onOpenSettings: () => void;
   onExit: () => void;
   onComplete: (
     level: LevelDef,
     moves: number,
     stars: number,
-    meta?: { flawless: boolean; usedHint: boolean; transposes: number }
+    meta?: {
+      flawless: boolean;
+      usedHint: boolean;
+      transposes: number;
+      elapsedSec?: number;
+      speedsterEarned?: boolean;
+    }
   ) => void;
   onRetryStage?: (level: LevelDef) => void;
   onNextLevel: () => void;
@@ -81,13 +97,10 @@ interface GameBoardProps {
   onNewPractice?: () => void;
 }
 
-interface ActiveDrag {
+interface DragMeta {
   term: Term;
   fromSide: Side;
   dragKind: DragKind;
-  x: number;
-  y: number;
-  tilt: number;
   overSide: Side | null;
   combineTargetId: string | null;
   combineIsZero: boolean;
@@ -118,6 +131,7 @@ interface FlyingTileAnim {
   apexY: number;
   toX: number;
   toY: number;
+  fromSide: Side;
   toSide: Side;
   dragKind: DragKind;
   visualStyle: VisualStyle;
@@ -132,6 +146,8 @@ interface FlyingTileAnim {
 
 interface BridgeFlashState {
   tag: string;
+  fromSide?: Side;
+  toSide?: Side;
   startTerm?: Term;
   endTerm?: Term;
 }
@@ -160,8 +176,16 @@ const COSMIC_STARS = [
   { left: '84%', top: '80%', size: 4, dur: '2.4s', delay: '1.0s', color: '#22D3EE' },
 ];
 
+function formatSeconds(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export const GameBoard: React.FC<GameBoardProps> = ({
   level,
+  speedRunEnabled = false,
+  onToggleSpeedRun,
   onOpenSettings,
   onExit,
   onComplete,
@@ -245,13 +269,44 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const [solvedInfo, setSolvedInfo] = useState<{
     displayResult: string;
     stars: number;
+    elapsedSec?: number;
+    speedsterEarned?: boolean;
+    speedRunTargetSec?: number;
   } | null>(null);
+
+  const speedRunTargetSec = Math.max(15, level.parMoves * 7 + (level.chapterId >= 3 ? 6 : 0));
+  const [speedRunElapsed, setSpeedRunElapsed] = useState(0);
 
   const [tutorialIndex, setTutorialIndex] = useState<number | null>(
     level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null
   );
 
-  const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
+  const [dragMeta, setDragMeta] = useState<DragMeta | null>(null);
+  const dragMetaRef = useRef<DragMeta | null>(null);
+  const dragPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragHangRef = useRef<HTMLDivElement | null>(null);
+  const dragRafRef = useRef<number | null>(null);
+  const dragPhysicsRef = useRef({
+    lastX: 0,
+    lastT: 0,
+    vx: 0,
+    angle: 0,
+    angVel: 0,
+  });
+  const dragHitCacheRef = useRef<{
+    leftRect: DOMRect | null;
+    rightRect: DOMRect | null;
+    splitX: number;
+    combineTargets: Array<{
+      id: string;
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+      isZero: boolean;
+    }>;
+  } | null>(null);
   const pendingRef = useRef<PendingPointer | null>(null);
   const suppressClickRef = useRef(false);
   const leftPanRef = useRef<HTMLDivElement | null>(null);
@@ -259,6 +314,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const bridgeRef = useRef<HTMLDivElement | null>(null);
   const flyTimerRef = useRef<number[]>([]);
   const moodTimerRef = useRef<number | null>(null);
+  const lowTimeNotifiedRef = useRef<0 | 30 | 15>(0);
   const hadMistakeRef = useRef(false);
   const usedHintRef = useRef(false);
   const transposesRunRef = useRef(0);
@@ -276,12 +332,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   // ALWAYS-ACTIVE MUSIC LIFECYCLE & BOSS HP/GIMMICK COMPUTATION
   const totalBossPhases = level.boss?.phases.length ?? 0;
-  const bossMaxHp = bossGimmick === 'heal_once' ? 3 : totalBossPhases;
+  const bossMaxHp = bossGimmick === 'heal_once' ? 5 : totalBossPhases;
   const bossCurrentHp = useMemo(() => {
     if (!isBossLevel) return 0;
     if (bossGimmick === 'heal_once') {
       if (bossPreHealOneHp) return 1;
-      if (!bossHasHealed) return Math.max(1, 3 - bossPhaseIndex);
+      if (!bossHasHealed) return Math.max(1, 5 - bossPhaseIndex);
       return Math.max(0, totalBossPhases - bossPhaseIndex);
     }
     return Math.max(0, totalBossPhases - bossPhaseIndex);
@@ -302,7 +358,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     !solvedInfo &&
     !bossTimedOut &&
     ((bossGimmick === 'speed_enrage' && bossCurrentHp === 1) || cosmicMode);
-  const timeSpeedMultiplier = cosmicMode ? 4 : isSpeedUp ? 2 : 1;
+  const timeSpeedMultiplier = isSpeedUp ? 2 : 1;
+
+  const isBossLowTime =
+    isBossLevel &&
+    !isTimeFrozen &&
+    !solvedInfo &&
+    !bossTimedOut &&
+    bossCurrentHp > 0 &&
+    bossTimeLeft > 0 &&
+    bossTimeLeft <= 30;
+  const isBossCriticalTime = isBossLowTime && bossTimeLeft <= 15;
 
   const phonkActive =
     isBossLevel && !solvedInfo && !bossTimedOut && bossCurrentHp > 0 && bossCinematic !== 'victory';
@@ -312,12 +378,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   useEffect(() => {
     if (phonkActive) {
       stageMusic.stop();
-      phonkMusic.start(bossIntensity);
+      phonkMusic.start(bossIntensity, level.chapterId);
     } else {
       phonkMusic.stop();
-      stageMusic.start();
+      stageMusic.start(level.chapterId);
     }
-  }, [phonkActive, bossIntensity]);
+  }, [phonkActive, bossIntensity, level.chapterId]);
 
   useEffect(() => {
     return () => {
@@ -325,6 +391,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       if (moodTimerRef.current) window.clearTimeout(moodTimerRef.current);
       if (timeBonusTimerRef.current) window.clearTimeout(timeBonusTimerRef.current);
       if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
+      if (dragRafRef.current) window.cancelAnimationFrame(dragRafRef.current);
     };
   }, []);
 
@@ -332,7 +399,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   // - Paused while epic boss encounter/victory video is playing!
   // - Bab 3 (freeze_penalty): frozen while asleep; starts ticking at 1x once player wakes Kura Meriam!
   // - Bab 1 at 1 HP: 2x faster tick (500ms)!
-  // - Bab 5 at <=5 HP (Cosmic Rush): 4x faster tick (250ms)!
+  // - Bab 5 at <=5 HP (Cosmic Rush): 2x faster tick (500ms)!
   // - Others: normal 1000ms tick.
   useEffect(() => {
     if (
@@ -348,7 +415,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     ) {
       return;
     }
-    const tickMs = timeSpeedMultiplier === 4 ? 250 : timeSpeedMultiplier === 2 ? 500 : 1000;
+    const tickMs = timeSpeedMultiplier === 2 ? 500 : 1000;
     const intervalId = window.setInterval(() => {
       setBossTimeLeft((prev) => {
         if (prev <= 1) {
@@ -359,7 +426,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           setBossTimedOut(true);
           setBossDialogue(level.boss!.timeoutLine);
           setSelected(null);
-          setActiveDrag(null);
+          dragMetaRef.current = null;
+          setDragMeta(null);
           pendingRef.current = null;
           return 0;
         }
@@ -380,6 +448,49 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     bossCurrentHp,
   ]);
 
+  // Kibo low-time boss interaction: alert player at <= 30s and <= 15s
+  useEffect(() => {
+    if (
+      !isBossLevel ||
+      !level.boss ||
+      bossCinematic !== null ||
+      isTimeFrozen ||
+      solvedInfo ||
+      bossTimedOut ||
+      bossCurrentHp <= 0 ||
+      bossTimeLeft <= 0
+    ) {
+      return;
+    }
+    if (bossTimeLeft <= 15 && lowTimeNotifiedRef.current < 15) {
+      lowTimeNotifiedRef.current = 15;
+      sound.playNudge();
+      flashKiboMood('oops', 2800);
+      setFeedback({
+        text: level.boss.kiboLines.lowTimeCritical,
+        tone: 'warn',
+      });
+    } else if (bossTimeLeft <= 30 && bossTimeLeft > 15 && lowTimeNotifiedRef.current < 30) {
+      lowTimeNotifiedRef.current = 30;
+      sound.playNudge();
+      flashKiboMood('oops', 2400);
+      setFeedback({
+        text: level.boss.kiboLines.lowTimeAlert,
+        tone: 'warn',
+      });
+    }
+  }, [
+    isBossLevel,
+    level.boss,
+    bossCinematic,
+    isTimeFrozen,
+    solvedInfo,
+    bossTimedOut,
+    bossCurrentHp,
+    bossTimeLeft,
+    flashKiboMood,
+  ]);
+
   // Non-boss stage 1-minute AFK defeat: Kibo faints & player loses the stage (except Boss stages!)
   useEffect(() => {
     if (isBossLevel || solvedInfo || afkDefeat) return;
@@ -390,7 +501,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     const triggerAfkLoss = () => {
       sound.playKiboCry();
       setSelected(null);
-      setActiveDrag(null);
+      dragMetaRef.current = null;
+      setDragMeta(null);
       pendingRef.current = null;
       setAfkDefeat(true);
       setFeedback({
@@ -470,8 +582,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setFlyingAnim(null);
     setFlyingMidFlipped(false);
     setSolvedInfo(null);
+    setSpeedRunElapsed(0);
     setShowMobileLog(false);
     setTutorialIndex(level.tutorialSteps && level.tutorialSteps.length > 0 ? 0 : null);
+    dragMetaRef.current = null;
+    setDragMeta(null);
+    pendingRef.current = null;
+    lowTimeNotifiedRef.current = 0;
     hadMistakeRef.current = false;
     usedHintRef.current = false;
     transposesRunRef.current = 0;
@@ -490,6 +607,17 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
   const activeTutorialStep =
     tutorialIndex !== null && level.tutorialSteps ? level.tutorialSteps[tutorialIndex] : null;
+
+  // Optional Speed Run timer for regular stages
+  useEffect(() => {
+    if (isBossLevel || !speedRunEnabled || solvedInfo || afkDefeat || activeTutorialStep) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      setSpeedRunElapsed((prev) => prev + 1);
+    }, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isBossLevel, speedRunEnabled, solvedInfo, afkDefeat, activeTutorialStep]);
 
   const triggerFlyAnimation = useCallback(
     (
@@ -561,12 +689,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         bridgeTag = term.value > 0 ? `+${absVal} → −${absVal}` : `−${absVal} → +${absVal}`;
       } else if (term.kind === 'var') {
         startTerm = { ...term };
-        endTerm =
-          pureSymbolsMode && term.coeff === 1 && term.denom === 1
-            ? { ...term }
-            : { ...term, coeff: -term.coeff };
-        if (pureSymbolsMode && term.coeff === 1 && term.denom === 1) {
-          bridgeTag = 'Pindah Ruas';
+        endTerm = { ...term, coeff: -term.coeff };
+        if (pureSymbolsMode && Math.abs(term.coeff) === 1 && term.denom === 1) {
+          const targetSidePreview: Side = fromSide === 'left' ? 'right' : 'left';
+          bridgeStartSym = startTerm;
+          bridgeEndSym = endTerm;
+          bridgeTag = targetSidePreview === 'right' ? 'Peti → Terbuka' : 'Terbuka → Tertutup';
         } else {
           const absC = Math.abs(term.coeff);
           const cStr = absC === 1 ? '' : `${absC}`;
@@ -583,6 +711,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       setFlyingMidFlipped(false);
       setBridgeFlash({
         tag: bridgeTag,
+        fromSide,
+        toSide,
         startTerm: bridgeStartSym,
         endTerm: bridgeEndSym,
       });
@@ -595,6 +725,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         apexY,
         toX,
         toY,
+        fromSide,
         toSide,
         dragKind,
         visualStyle: pureSymbolsMode ? 'pure_symbols' : visualStyle,
@@ -645,7 +776,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         if (timePenaltyTimerRef.current) window.clearTimeout(timePenaltyTimerRef.current);
         timePenaltyTimerRef.current = window.setTimeout(() => setTimePenaltyFlash(false), 1150);
         setSelected(null);
-        setActiveDrag(null);
+        dragMetaRef.current = null;
+        setDragMeta(null);
         pendingRef.current = null;
 
         if (nextMistakes >= maxBossMistakes || nextTime <= 0) {
@@ -770,10 +902,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
           if (nextPhaseIdx < totalPhases) {
             const isOrcaHealTrigger =
-              bossGimmick === 'heal_once' && !bossHasHealed && nextPhaseIdx === 2;
+              bossGimmick === 'heal_once' && !bossHasHealed && nextPhaseIdx === 4;
             const nextHpAfterHit =
               bossGimmick === 'heal_once' && !bossHasHealed
-                ? Math.max(1, 3 - nextPhaseIdx)
+                ? Math.max(1, 5 - nextPhaseIdx)
                 : totalPhases - nextPhaseIdx;
             const willEnterSpeedOrCosmic =
               (bossGimmick === 'speed_enrage' && nextHpAfterHit === 1) ||
@@ -888,14 +1020,24 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
         const stars =
           newTotalMoves <= level.parMoves ? 3 : newTotalMoves <= level.parMoves + 2 ? 2 : 1;
+        const capturedElapsed = speedRunElapsed;
+        const speedsterEarned = Boolean(speedRunEnabled && capturedElapsed <= speedRunTargetSec);
         flashKiboMood('excited', 2400);
         window.setTimeout(() => {
           sound.playVictory();
-          setSolvedInfo({ displayResult: check.displayResult as string, stars });
+          setSolvedInfo({
+            displayResult: check.displayResult as string,
+            stars,
+            elapsedSec: speedRunEnabled ? capturedElapsed : undefined,
+            speedsterEarned,
+            speedRunTargetSec: speedRunEnabled ? speedRunTargetSec : undefined,
+          });
           onComplete(level, newTotalMoves, stars, {
             flawless: !hadMistakeRef.current,
             usedHint: usedHintRef.current,
             transposes: transposesRunRef.current,
+            elapsedSec: speedRunEnabled ? capturedElapsed : undefined,
+            speedsterEarned,
           });
         }, 320);
       }
@@ -919,6 +1061,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       triggerFlyAnimation,
       tutorialIndex,
       flashKiboMood,
+      speedRunEnabled,
+      speedRunElapsed,
+      speedRunTargetSec,
     ]
   );
 
@@ -931,9 +1076,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       // Ensure Web Audio unlocks cleanly on mobile touch gesture
       if (phonkActive) {
-        phonkMusic.start(bossIntensity);
+        phonkMusic.start(bossIntensity, level.chapterId);
       } else {
-        stageMusic.start();
+        stageMusic.start(level.chapterId);
       }
 
       pendingRef.current = {
@@ -955,52 +1100,130 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       afkDefeat,
       phonkActive,
       bossIntensity,
+      level.chapterId,
     ]
   );
 
+  const applyGhostTransform = useCallback(() => {
+    dragRafRef.current = null;
+    const el = dragGhostRef.current;
+    const hangEl = dragHangRef.current;
+    const meta = dragMetaRef.current;
+    if (!el || !meta) return;
+
+    const { x, y } = dragPosRef.current;
+    const crossing = meta.overSide !== null && meta.overSide !== meta.fromSide;
+    el.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0) translate(-50%, -18%) scale(${
+      crossing ? 1.07 : 1.02
+    })`;
+
+    const phys = dragPhysicsRef.current;
+    const now = performance.now();
+    if (now - phys.lastT > 24) {
+      phys.vx *= 0.82;
+      if (Math.abs(phys.vx) < 0.01) phys.vx = 0;
+    }
+
+    // Positive vx (dragging right) makes bottom trail left -> positive CSS clockwise deg
+    const targetAngle = Math.max(-24, Math.min(24, phys.vx * 14));
+    phys.angVel = (phys.angVel + (targetAngle - phys.angle) * 0.24) * 0.72;
+    phys.angle += phys.angVel;
+
+    if (hangEl) {
+      hangEl.style.transform = `rotate(${phys.angle.toFixed(2)}deg)`;
+    }
+
+    const settled =
+      Math.abs(phys.vx) <= 0.02 &&
+      Math.abs(phys.angle) <= 0.25 &&
+      Math.abs(phys.angVel) <= 0.25;
+    if (!settled) {
+      dragRafRef.current = window.requestAnimationFrame(applyGhostTransform);
+    } else {
+      phys.angle = 0;
+      phys.angVel = 0;
+      if (hangEl) hangEl.style.transform = 'rotate(0deg)';
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (dragMeta && !dragRafRef.current) {
+      dragRafRef.current = window.requestAnimationFrame(applyGhostTransform);
+    }
+  }, [dragMeta, applyGhostTransform]);
+
   useEffect(() => {
-    const getPanUnderPoint = (x: number, y: number): Side | null => {
-      const lRect = leftPanRef.current?.getBoundingClientRect();
-      if (lRect && x >= lRect.left && x <= lRect.right && y >= lRect.top - 40 && y <= lRect.bottom + 40) {
-        return 'left';
+    const buildHitCache = (draggedTerm: Term, fromSide: Side, dragKind: DragKind) => {
+      const leftRect = leftPanRef.current?.getBoundingClientRect() ?? null;
+      const rightRect = rightPanRef.current?.getBoundingClientRect() ?? null;
+      const splitX =
+        leftRect && rightRect ? (leftRect.right + rightRect.left) / 2 : window.innerWidth / 2;
+
+      const combineTargets: Array<{
+        id: string;
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+        isZero: boolean;
+      }> = [];
+
+      if (dragKind === 'term') {
+        const nodes = document.querySelectorAll<HTMLElement>(
+          `[data-term-id][data-side="${fromSide}"]`
+        );
+        nodes.forEach((el) => {
+          const tid = el.getAttribute('data-term-id');
+          if (!tid || tid === draggedTerm.id) return;
+          const targetTerm = eqState[fromSide].find((t) => t.id === tid);
+          if (!targetTerm || !canCombineTerms(draggedTerm, targetTerm)) return;
+          const r = el.getBoundingClientRect();
+          const isZero =
+            draggedTerm.kind === 'sym' ||
+            (draggedTerm.kind === 'const' &&
+              targetTerm.kind === 'const' &&
+              draggedTerm.value + targetTerm.value === 0) ||
+            (draggedTerm.kind === 'var' &&
+              targetTerm.kind === 'var' &&
+              draggedTerm.coeff + targetTerm.coeff === 0);
+          combineTargets.push({
+            id: tid,
+            left: r.left,
+            right: r.right,
+            top: r.top,
+            bottom: r.bottom,
+            isZero,
+          });
+        });
       }
-      const rRect = rightPanRef.current?.getBoundingClientRect();
-      if (rRect && x >= rRect.left && x <= rRect.right && y >= rRect.top - 40 && y <= rRect.bottom + 40) {
-        return 'right';
-      }
-      if (lRect && rRect) {
-        const mid = (lRect.right + rRect.left) / 2;
-        return x < mid ? 'left' : 'right';
-      }
-      return null;
+
+      return { leftRect, rightRect, splitX, combineTargets };
     };
 
-    const findCombineTarget = (
+    const getPanUnderPointCached = (x: number, y: number): Side | null => {
+      const cache = dragHitCacheRef.current;
+      if (!cache) return null;
+      const l = cache.leftRect;
+      if (l && x >= l.left && x <= l.right && y >= l.top - 40 && y <= l.bottom + 40) {
+        return 'left';
+      }
+      const r = cache.rightRect;
+      if (r && x >= r.left && x <= r.right && y >= r.top - 40 && y <= r.bottom + 40) {
+        return 'right';
+      }
+      return x < cache.splitX ? 'left' : 'right';
+    };
+
+    const findCombineTargetCached = (
       x: number,
-      y: number,
-      draggedTerm: Term,
-      fromSide: Side
+      y: number
     ): { id: string; isZero: boolean } | null => {
-      const els = document.elementsFromPoint(x, y);
-      for (const el of els) {
-        const tileEl = (el as HTMLElement).closest?.('[data-term-id]') as HTMLElement | null;
-        if (tileEl) {
-          const tid = tileEl.getAttribute('data-term-id');
-          const tSide = tileEl.getAttribute('data-side') as Side | null;
-          if (tid && tSide === fromSide && tid !== draggedTerm.id) {
-            const targetTerm = eqState[fromSide].find((t) => t.id === tid);
-            if (targetTerm && canCombineTerms(draggedTerm, targetTerm)) {
-              const isZero =
-                draggedTerm.kind === 'sym' ||
-                (draggedTerm.kind === 'const' &&
-                  targetTerm.kind === 'const' &&
-                  draggedTerm.value + targetTerm.value === 0) ||
-                (draggedTerm.kind === 'var' &&
-                  targetTerm.kind === 'var' &&
-                  draggedTerm.coeff + targetTerm.coeff === 0);
-              return { id: tid, isZero };
-            }
-          }
+      const cache = dragHitCacheRef.current;
+      if (!cache) return null;
+      for (let i = 0; i < cache.combineTargets.length; i++) {
+        const t = cache.combineTargets[i];
+        if (x >= t.left && x <= t.right && y >= t.top && y <= t.bottom) {
+          return { id: t.id, isZero: t.isZero };
         }
       }
       return null;
@@ -1010,48 +1233,80 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       const pending = pendingRef.current;
       if (!pending || pending.pointerId !== e.pointerId) return;
 
+      const prevMeta = dragMetaRef.current;
       const dx = e.clientX - pending.startX;
       const dy = e.clientY - pending.startY;
-      const dist = Math.hypot(dx, dy);
 
-      if (!activeDrag && dist < 8) return;
+      if (!prevMeta && dx * dx + dy * dy < 64) return;
 
-      if (!activeDrag) {
+      const now = performance.now();
+      if (!prevMeta) {
         sound.playPickup();
         suppressClickRef.current = true;
         setSelected(null);
+        dragHitCacheRef.current = buildHitCache(pending.term, pending.fromSide, pending.dragKind);
+        dragPhysicsRef.current = {
+          lastX: e.clientX,
+          lastT: now,
+          vx: 0,
+          angle: -7,
+          angVel: 2.6,
+        };
+      } else {
+        const phys = dragPhysicsRef.current;
+        const dt = Math.max(8, now - phys.lastT);
+        const instantVx = (e.clientX - phys.lastX) / dt;
+        phys.vx = phys.vx * 0.55 + instantVx * 0.45;
+        phys.lastX = e.clientX;
+        phys.lastT = now;
       }
 
-      const vx = e.clientX - pending.lastX;
-      pending.lastX = e.clientX;
-      const tilt = Math.max(-13, Math.min(13, vx * 0.65));
+      dragPosRef.current = { x: e.clientX, y: e.clientY };
 
-      const overSide = getPanUnderPoint(e.clientX, e.clientY);
+      const overSide = getPanUnderPointCached(e.clientX, e.clientY);
       const combineHit =
-        pending.dragKind === 'term'
-          ? findCombineTarget(e.clientX, e.clientY, pending.term, pending.fromSide)
-          : null;
+        pending.dragKind === 'term' ? findCombineTargetCached(e.clientX, e.clientY) : null;
+      const nextTargetId = combineHit?.id ?? null;
+      const nextIsZero = combineHit?.isZero ?? false;
 
-      setActiveDrag({
-        term: pending.term,
-        fromSide: pending.fromSide,
-        dragKind: pending.dragKind,
-        x: e.clientX,
-        y: e.clientY,
-        tilt,
-        overSide,
-        combineTargetId: combineHit?.id ?? null,
-        combineIsZero: combineHit?.isZero ?? false,
-      });
+      if (
+        !prevMeta ||
+        prevMeta.overSide !== overSide ||
+        prevMeta.combineTargetId !== nextTargetId ||
+        prevMeta.combineIsZero !== nextIsZero
+      ) {
+        const nextMeta: DragMeta = {
+          term: pending.term,
+          fromSide: pending.fromSide,
+          dragKind: pending.dragKind,
+          overSide,
+          combineTargetId: nextTargetId,
+          combineIsZero: nextIsZero,
+        };
+        dragMetaRef.current = nextMeta;
+        setDragMeta(nextMeta);
+      }
+
+      if (!dragRafRef.current) {
+        dragRafRef.current = window.requestAnimationFrame(applyGhostTransform);
+      }
     };
 
     const onPointerUp = (e: PointerEvent) => {
       const pending = pendingRef.current;
       if (!pending || pending.pointerId !== e.pointerId) return;
 
-      const currentDrag = activeDrag;
+      if (dragRafRef.current) {
+        window.cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = null;
+      }
+
+      const currentDrag = dragMetaRef.current;
+      const lastPos = dragPosRef.current;
+      dragHitCacheRef.current = null;
+      dragMetaRef.current = null;
       pendingRef.current = null;
-      setActiveDrag(null);
+      setDragMeta(null);
 
       if (currentDrag) {
         window.setTimeout(() => {
@@ -1071,7 +1326,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             term: currentDrag.term,
             fromSide: currentDrag.fromSide,
             dragKind: currentDrag.dragKind,
-            originPoint: { x: currentDrag.x, y: currentDrag.y },
+            originPoint: { x: lastPos.x, y: lastPos.y },
           };
           if (currentDrag.dragKind === 'coeff') {
             commitMove(
@@ -1096,7 +1351,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       }
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
     return () => {
@@ -1104,7 +1359,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
     };
-  }, [activeDrag, eqState, commitMove]);
+  }, [eqState, commitMove, applyGhostTransform]);
 
   const handleTileTap = useCallback(
     (term: Term, side: Side) => {
@@ -1215,6 +1470,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     setActiveHint(null);
     setKiboMood('idle');
     setSolvedInfo(null);
+    setSpeedRunElapsed(0);
+    dragMetaRef.current = null;
+    setDragMeta(null);
+    pendingRef.current = null;
+    lowTimeNotifiedRef.current = 0;
     setFeedback({ text: 'Papan dikembalikan ke posisi awal.', tone: 'info' });
   };
 
@@ -1276,7 +1536,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         setBossTimedOut(true);
         setBossDialogue(level.boss.timeoutLine);
         setSelected(null);
-        setActiveDrag(null);
+        dragMetaRef.current = null;
+        setDragMeta(null);
         pendingRef.current = null;
         setFeedback({
           text: 'ADUH! Menyentuh Cthulhu memotong 5 detik terakhir dan waktumu habis!',
@@ -1305,15 +1566,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   };
 
   const ghostPreview = useMemo(() => {
-    if (!activeDrag) return null;
-    const crossing = activeDrag.overSide !== null && activeDrag.overSide !== activeDrag.fromSide;
+    if (!dragMeta) return null;
+    const crossing = dragMeta.overSide !== null && dragMeta.overSide !== dragMeta.fromSide;
 
-    if (activeDrag.dragKind === 'coeff') {
+    if (dragMeta.dragKind === 'coeff') {
       const factor =
-        activeDrag.term.kind === 'var'
-          ? activeDrag.term.coeff
-          : activeDrag.term.kind === 'group'
-            ? activeDrag.term.factor
+        dragMeta.term.kind === 'var'
+          ? dragMeta.term.coeff
+          : dragMeta.term.kind === 'group'
+            ? dragMeta.term.factor
             : 1;
       const fStr = factor < 0 ? `(−${Math.abs(factor)})` : `${factor}`;
       return {
@@ -1327,8 +1588,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       };
     }
 
-    if (activeDrag.dragKind === 'denom' && activeDrag.term.kind === 'var') {
-      const d = activeDrag.term.denom;
+    if (dragMeta.dragKind === 'denom' && dragMeta.term.kind === 'var') {
+      const d = dragMeta.term.denom;
       return {
         crossing,
         op: {
@@ -1340,14 +1601,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       };
     }
 
-    const t = activeDrag.term;
+    const t = dragMeta.term;
     if (t.kind === 'sym') {
       const nextSign: 1 | -1 = crossing ? (t.sign === 1 ? -1 : 1) : t.sign;
       const previewTerm: Term = { ...t, sign: nextSign };
       return {
         crossing,
         term: previewTerm,
-        caption: activeDrag.combineTargetId
+        caption: dragMeta.combineTargetId
           ? 'Saling hapus & lenyap!'
           : crossing
             ? 'Berubah jadi lawan!'
@@ -1362,8 +1623,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       return {
         crossing,
         term: previewTerm,
-        caption: activeDrag.combineTargetId
-          ? activeDrag.combineIsZero
+        caption: dragMeta.combineTargetId
+          ? dragMeta.combineIsZero
             ? 'Saling hapus jadi 0!'
             : 'Lepas untuk gabung'
           : crossing
@@ -1373,11 +1634,25 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     }
 
     if (t.kind === 'var') {
-      if (pureSymbolsMode && t.coeff === 1 && t.denom === 1) {
+      if (pureSymbolsMode && Math.abs(t.coeff) === 1 && t.denom === 1) {
+        const targetSide: Side = crossing
+          ? dragMeta.fromSide === 'left'
+            ? 'right'
+            : 'left'
+          : dragMeta.fromSide;
+        const nextCoeff = crossing ? -t.coeff : t.coeff;
+        const previewTerm: Term = { ...t, coeff: nextCoeff };
         return {
           crossing,
-          term: t,
-          caption: 'Sisakan Peti sendirian!',
+          targetSide,
+          term: previewTerm,
+          caption: crossing
+            ? targetSide === 'right'
+              ? 'Di ruas kanan: Peti Terbuka'
+              : 'Di ruas kiri: Peti Tertutup'
+            : targetSide === 'right'
+              ? 'Geser ke kiri untuk menutup'
+              : 'Geser ke kanan untuk membuka',
         };
       }
       const nextCoeff = crossing ? -t.coeff : t.coeff;
@@ -1389,8 +1664,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       return {
         crossing,
         term: previewTerm,
-        caption: activeDrag.combineTargetId
-          ? activeDrag.combineIsZero
+        caption: dragMeta.combineTargetId
+          ? dragMeta.combineIsZero
             ? 'Saling hapus jadi 0!'
             : 'Lepas untuk gabung'
           : crossing
@@ -1404,14 +1679,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       term: t,
       caption: 'Geser kartu',
     };
-  }, [activeDrag, pureSymbolsMode]);
+  }, [dragMeta, pureSymbolsMode]);
 
   const beamTilt = useMemo(() => {
     if (flyingAnim) return flyingAnim.toX > flyingAnim.fromX ? 7 : -7;
-    if (!activeDrag || !activeDrag.overSide) return 0;
-    if (activeDrag.overSide === activeDrag.fromSide) return 0;
-    return activeDrag.overSide === 'right' ? 6 : -6;
-  }, [activeDrag, flyingAnim]);
+    if (!dragMeta || !dragMeta.overSide) return 0;
+    if (dragMeta.overSide === dragMeta.fromSide) return 0;
+    return dragMeta.overSide === 'right' ? 6 : -6;
+  }, [dragMeta, flyingAnim]);
 
   const combinedHighlightedIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1421,14 +1696,34 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   }, [activeHint, activeTutorialStep]);
 
   const defaultKiboMessage = isBossLevel && level.boss
-    ? level.boss.kiboLines.intro
+    ? isBossCriticalTime
+      ? level.boss.kiboLines.lowTimeCritical
+      : isBossLowTime
+        ? level.boss.kiboLines.lowTimeAlert
+        : level.boss.kiboLines.intro
     : isStageOne
       ? currentTip
-      : 'Ayo pecahkan sendiri dulu! Kalau butuh petunjuk, tekan tombol Bantuan.';
+      : isRestTime()
+        ? 'Sudah lewat jam 10 malam nih! Pelan-pelan ya, jangan lupa istirahat setelah stage ini!'
+        : 'Ayo pecahkan sendiri dulu! Kalau butuh petunjuk, tekan tombol Bantuan.';
 
   return (
-    <div className="relative min-h-[100dvh] flex flex-col game-canvas-bg text-[#0D354C]">
-      <BeachBackdrop />
+    <div
+      className={`relative min-h-[100dvh] flex flex-col game-canvas-bg game-canvas-ch-${level.chapterId} text-[#0D354C] ${
+        dragMeta ? 'is-dragging' : ''
+      }`}
+    >
+      <BeachBackdrop chapterId={level.chapterId} paused={!!bossCinematic} />
+      {!bossCinematic && (
+        <BeachEasterEggs
+          variant="game"
+          chapterId={level.chapterId}
+          onTriggerKibo={(quip) => {
+            flashKiboMood('excited', 1800);
+            setFeedback({ text: quip, tone: 'good' });
+          }}
+        />
+      )}
 
       {/* BAB 5 CTHULHU 1-HP COSMIC DIMENSION OVERLAY */}
       {cosmicMode && (
@@ -1479,7 +1774,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       )}
 
       {/* COASTAL ANDROID GAME TOP HUD BAR */}
-      <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/92 backdrop-blur-md border-b-2 border-[#7DD3FC]/55 px-3 sm:px-5 flex items-center justify-between gap-2.5 text-white shadow-md">
+      <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/96 border-b-2 border-[#7DD3FC]/55 px-3 sm:px-5 flex items-center justify-between gap-2.5 text-white shadow-md">
         <button
           type="button"
           onClick={onExit}
@@ -1529,8 +1824,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       </header>
 
       {/* MAIN GAME ARENA */}
-      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-4 items-start">
-        <section className="flex flex-col gap-3 min-w-0">
+      <main className="pointer-events-none relative z-10 flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 py-3.5 sm:py-5 grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-4 items-start">
+        <section className="pointer-events-auto flex flex-col gap-3 min-w-0">
           {/* BOSS BANNER */}
           {isBossLevel && level.boss && (
             <BossArenaBanner
@@ -1579,10 +1874,42 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
           {/* LIVE EQUATION SCOREBOARD BAR */}
           <div className="rounded-2xl game-panel px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#35637A] tabular-nums">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-[#35637A] tabular-nums">
               <span>Langkah {totalMoves}</span>
               <span aria-hidden="true">·</span>
               <span>Target {level.parMoves}</span>
+
+              {!isBossLevel && onToggleSpeedRun && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      sound.playPickup();
+                      onToggleSpeedRun();
+                    }}
+                    title="Aktifkan/nonaktifkan pengatur waktu Speed Run untuk Medali Speedster"
+                    className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-extrabold border transition-colors cursor-pointer ${
+                      speedRunEnabled
+                        ? speedRunElapsed <= speedRunTargetSec
+                          ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
+                          : 'bg-[#F1F5F9] border-[#CBD5E1] text-[#475569]'
+                        : 'bg-[#E0F2FE] border-[#7DD3FC] text-[#0369A1] hover:bg-[#BAE6FD]'
+                    }`}
+                  >
+                    {speedRunEnabled ? (
+                      <Zap className="w-3.5 h-3.5 text-[#D97706]" aria-hidden="true" />
+                    ) : (
+                      <Timer className="w-3.5 h-3.5" aria-hidden="true" />
+                    )}
+                    <span>
+                      {speedRunEnabled
+                        ? `${formatSeconds(speedRunElapsed)} / ${formatSeconds(speedRunTargetSec)}`
+                        : 'Speed Run'}
+                    </span>
+                  </button>
+                </>
+              )}
             </div>
             <div
               className="font-mono font-extrabold text-base sm:text-xl text-[#0284C7] tracking-tight tabular-nums"
@@ -1600,13 +1927,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           {!activeTutorialStep && (
             <div
               className={`rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm leading-snug border-2 flex items-center gap-3 transition-colors shadow-sm ${
-                feedback?.tone === 'warn'
+                feedback?.tone === 'warn' || isBossCriticalTime
                   ? 'bg-[#FFF1F2] border-[#FDA4AF] text-[#9F1239]'
-                  : feedback?.tone === 'good'
-                    ? 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]'
-                    : cosmicMode
-                      ? 'bg-[#2E1065]/92 border-[#E879F9] text-[#FAF5FF]'
-                      : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
+                  : isBossLowTime
+                    ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#78350F]'
+                    : feedback?.tone === 'good'
+                      ? 'bg-[#ECFEFF] border-[#5EEAD4] text-[#0F4C5C]'
+                      : cosmicMode
+                        ? 'bg-[#2E1065]/92 border-[#E879F9] text-[#FAF5FF]'
+                        : 'bg-[#FFFDF5] border-[#F6CF7D] text-[#17465E]'
               }`}
             >
               <KiboAvatar
@@ -1615,21 +1944,48 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                 mood={afkDefeat ? 'fainted' : kiboMood}
                 interactive
                 afkTimeoutMs={0}
-                customQuips={isBossLevel ? level.boss?.kiboLines.tapLines : undefined}
+                customQuips={
+                  isBossLevel
+                    ? isBossLowTime
+                      ? level.boss?.kiboLines.lowTimeTapLines
+                      : level.boss?.kiboLines.tapLines
+                    : undefined
+                }
                 onInteract={(quip) => {
                   flashKiboMood('giggle', 1300);
-                  setFeedback({ text: quip, tone: 'good' });
+                  setFeedback({ text: quip, tone: isBossCriticalTime ? 'warn' : 'good' });
                 }}
               />
               <div className="flex-1 min-w-0">
-                <span
-                  className={`font-extrabold text-[11px] block ${
-                    cosmicMode && !feedback ? 'text-[#F0ABFC]' : 'text-[#0284C7]'
-                  }`}
-                >
-                  Kibo
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`font-extrabold text-[11px] ${
+                      isBossCriticalTime
+                        ? 'text-[#BE123C]'
+                        : isBossLowTime
+                          ? 'text-[#B45309]'
+                          : cosmicMode && !feedback
+                            ? 'text-[#F0ABFC]'
+                            : 'text-[#0284C7]'
+                    }`}
+                  >
+                    Kibo
+                  </span>
+                  {isBossLowTime && (
+                    <span
+                      className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono font-extrabold tabular-nums ${
+                        isBossCriticalTime
+                          ? 'bg-[#BE123C] text-white animate-pulse'
+                          : 'bg-[#F59E0B] text-[#291802]'
+                      }`}
+                    >
+                      Sisa {bossTimeLeft}d! Ketuk Kibo!
+                    </span>
+                  )}
+                </div>
+                <span className="font-medium block">
+                  {feedback ? feedback.text : defaultKiboMessage}
                 </span>
-                <span className="font-medium">{feedback ? feedback.text : defaultKiboMessage}</span>
               </div>
               {level.tutorialSteps && level.tutorialSteps.length > 0 && (
                 <button
@@ -1675,9 +2031,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <div
                 ref={leftPanRef}
                 onClick={() => handlePanClick('left')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-all duration-150 border-2 overflow-hidden ${
-                  activeDrag && activeDrag.fromSide === 'right' && activeDrag.overSide === 'left'
-                    ? 'bg-[#FEF9C3]/95 border-[#F59E0B] shadow-[inset_0_0_24px_rgba(245,158,11,0.28)]'
+                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
+                  dragMeta && dragMeta.fromSide === 'right' && dragMeta.overSide === 'left'
+                    ? 'bg-[#FEF9C3] border-[#F59E0B]'
                     : selected && selected.side === 'right'
                       ? 'bg-[#FFFBEB]/95 border-[#FBBF24] cursor-pointer'
                       : 'bg-[#EBF9FF]/94 border-[#7DD3FC]'
@@ -1702,9 +2058,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                       visualStyle={visualStyle}
                       isSelected={selected?.termId === term.id}
                       isHinted={combinedHighlightedIds.has(term.id)}
-                      isCombineTarget={activeDrag?.combineTargetId === term.id}
+                      isCombineTarget={dragMeta?.combineTargetId === term.id}
                       isDraggingThis={
-                        activeDrag?.term.id === term.id && activeDrag.dragKind === 'term'
+                        dragMeta?.term.id === term.id && dragMeta.dragKind === 'term'
                       }
                       onPointerStart={handlePointerStart}
                       onTap={handleTileTap}
@@ -1749,9 +2105,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               {(() => {
                 const isCrossingPortal =
                   !!flyingAnim ||
-                  (!!activeDrag &&
-                    activeDrag.overSide !== null &&
-                    activeDrag.overSide !== activeDrag.fromSide);
+                  (!!dragMeta &&
+                    dragMeta.overSide !== null &&
+                    dragMeta.overSide !== dragMeta.fromSide);
                 return (
                   <div className="relative flex flex-col items-center justify-center select-none">
                     <div
@@ -1784,9 +2140,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                       <div className="pointer-events-none absolute top-2.5 left-1/2 -translate-x-1/2 z-20 rounded-xl bg-[#FEF08A] text-[#291802] font-mono font-extrabold text-[11px] px-2 py-1 shadow-md whitespace-nowrap animate-pop-in flex items-center gap-1 border border-[#F59E0B]/40">
                         {bridgeFlash.startTerm && bridgeFlash.endTerm ? (
                           <>
-                            <InlineTermChip term={bridgeFlash.startTerm} pureSymbols size="xs" />
+                            <InlineTermChip
+                              term={bridgeFlash.startTerm}
+                              pureSymbols
+                              side={bridgeFlash.fromSide}
+                              size="xs"
+                            />
                             <span aria-hidden="true">→</span>
-                            <InlineTermChip term={bridgeFlash.endTerm} pureSymbols size="xs" />
+                            <InlineTermChip
+                              term={bridgeFlash.endTerm}
+                              pureSymbols
+                              side={bridgeFlash.toSide}
+                              size="xs"
+                            />
                           </>
                         ) : (
                           bridgeFlash.tag
@@ -1808,9 +2174,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <div
                 ref={rightPanRef}
                 onClick={() => handlePanClick('right')}
-                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-all duration-150 border-2 overflow-hidden ${
-                  activeDrag && activeDrag.fromSide === 'left' && activeDrag.overSide === 'right'
-                    ? 'bg-[#FEF9C3]/95 border-[#F59E0B] shadow-[inset_0_0_24px_rgba(245,158,11,0.28)]'
+                className={`relative rounded-2xl p-3 sm:p-5 flex flex-wrap items-center justify-center content-center gap-2.5 sm:gap-3.5 transition-colors duration-150 border-2 overflow-hidden ${
+                  dragMeta && dragMeta.fromSide === 'left' && dragMeta.overSide === 'right'
+                    ? 'bg-[#FEF9C3] border-[#F59E0B]'
                     : selected && selected.side === 'left'
                       ? 'bg-[#FFFBEB]/95 border-[#FBBF24] cursor-pointer'
                       : 'bg-[#EBF9FF]/94 border-[#7DD3FC]'
@@ -1835,9 +2201,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                       visualStyle={visualStyle}
                       isSelected={selected?.termId === term.id}
                       isHinted={combinedHighlightedIds.has(term.id)}
-                      isCombineTarget={activeDrag?.combineTargetId === term.id}
+                      isCombineTarget={dragMeta?.combineTargetId === term.id}
                       isDraggingThis={
-                        activeDrag?.term.id === term.id && activeDrag.dragKind === 'term'
+                        dragMeta?.term.id === term.id && dragMeta.dragKind === 'term'
                       }
                       onPointerStart={handlePointerStart}
                       onTap={handleTileTap}
@@ -1886,7 +2252,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <div className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-[#1E4E68] pl-1">
                 <span>Dipilih:</span>
                 {pureSymbolsMode ? (
-                  <InlineTermChip term={selectedTerm} pureSymbols size="sm" />
+                  <InlineTermChip term={selectedTerm} pureSymbols side={selected.side} size="sm" />
                 ) : (
                   <strong className="font-mono text-[#B45309]">
                     {formatTermShort(selectedTerm, pureSymbolsMode)}
@@ -2069,7 +2435,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
         {/* RIGHT PANEL: CATATAN PINDAH RUAS */}
         <aside
-          className={`${
+          className={`pointer-events-auto ${
             showMobileLog ? 'block' : 'hidden'
           } lg:block rounded-3xl game-panel p-4 sm:p-5`}
         >
@@ -2213,9 +2579,19 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-[#FDE047] shrink-0" aria-hidden="true" />
               {flyingAnim.bridgeStartSym && flyingAnim.bridgeEndSym ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <InlineTermChip term={flyingAnim.bridgeStartSym} pureSymbols size="xs" />
+                  <InlineTermChip
+                    term={flyingAnim.bridgeStartSym}
+                    pureSymbols
+                    side={flyingAnim.fromSide}
+                    size="xs"
+                  />
                   <span className="font-extrabold text-[#FDE047]">→</span>
-                  <InlineTermChip term={flyingAnim.bridgeEndSym} pureSymbols size="xs" />
+                  <InlineTermChip
+                    term={flyingAnim.bridgeEndSym}
+                    pureSymbols
+                    side={flyingAnim.toSide}
+                    size="xs"
+                  />
                 </span>
               ) : (
                 <span className="font-mono font-extrabold text-xs sm:text-sm tracking-tight">
@@ -2245,7 +2621,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               exit={{ opacity: 0, scale: 0.85 }}
               transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
               style={{ perspective: 1000 }}
-              className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 drop-shadow-[0_12px_24px_rgba(245,158,11,0.48)]"
+              className="fixed top-0 left-0 z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2"
             >
               {flyingAnim.dragKind === 'coeff' || flyingAnim.dragKind === 'denom' ? (
                 flyingAnim.startOp &&
@@ -2265,6 +2641,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   <TileCardFace
                     term={flyingMidFlipped ? flyingAnim.endTerm : flyingAnim.startTerm}
                     visualStyle={flyingAnim.visualStyle}
+                    side={flyingMidFlipped ? flyingAnim.toSide : flyingAnim.fromSide}
                     glowGold
                   />
                 )
@@ -2274,34 +2651,42 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         )}
       </AnimatePresence>
 
-      {/* VELOCITY-TILTED FLOATING DRAG CARD (STAYS A REAL SQUARE CARD & KEEPS SYMBOLS!) */}
-      {activeDrag && ghostPreview && (
+      {/* INTERACTIVE VELOCITY-SPRING HANGING DRAG CARD (ZERO-REFLOW REF-DRIVEN) */}
+      {dragMeta && ghostPreview && (
         <div
-          style={{
-            transform: `translate3d(${activeDrag.x}px, ${activeDrag.y}px, 0) translate(-50%, -62%) rotate(${activeDrag.tilt}deg) scale(${
-              ghostPreview.crossing ? 1.08 : 1.03
-            })`,
-          }}
-          className="fixed top-0 left-0 z-50 pointer-events-none flex flex-col items-center gap-1.5 transition-transform duration-75 ease-out"
+          ref={dragGhostRef}
+          style={{ willChange: 'transform', contain: 'layout style' }}
+          className="fixed top-0 left-0 z-50 pointer-events-none flex flex-col items-center gap-1.5"
         >
-          {'op' in ghostPreview && ghostPreview.op ? (
-            <OperatorCardFace
-              opSymbol={ghostPreview.op.opSymbol}
-              valueLabel={ghostPreview.op.valueLabel}
-              tone={ghostPreview.op.tone}
-              glowGold={ghostPreview.crossing}
-            />
-          ) : (
-            'term' in ghostPreview &&
-            ghostPreview.term && (
-              <TileCardFace
-                term={ghostPreview.term}
-                visualStyle={pureSymbolsMode ? 'pure_symbols' : visualStyle}
+          {/* Golden finger pinch anchor dot */}
+          <span
+            aria-hidden="true"
+            className="w-2.5 h-2.5 rounded-full bg-[#FEF08A] border-2 border-[#B45309] shadow-sm -mb-2 relative z-10"
+          />
+          <div
+            ref={dragHangRef}
+            style={{ transformOrigin: '50% 6%', willChange: 'transform' }}
+          >
+            {'op' in ghostPreview && ghostPreview.op ? (
+              <OperatorCardFace
+                opSymbol={ghostPreview.op.opSymbol}
+                valueLabel={ghostPreview.op.valueLabel}
+                tone={ghostPreview.op.tone}
                 glowGold={ghostPreview.crossing}
               />
-            )
-          )}
-          <span className="rounded-lg bg-[#0D354C]/92 text-[#FEF08A] text-xs font-bold px-2.5 py-1 shadow-md whitespace-nowrap border border-[#7DD3FC]/35">
+            ) : (
+              'term' in ghostPreview &&
+              ghostPreview.term && (
+                <TileCardFace
+                  term={ghostPreview.term}
+                  visualStyle={pureSymbolsMode ? 'pure_symbols' : visualStyle}
+                  side={'targetSide' in ghostPreview ? ghostPreview.targetSide : dragMeta.fromSide}
+                  glowGold={ghostPreview.crossing}
+                />
+              )
+            )}
+          </div>
+          <span className="rounded-lg bg-[#0D354C]/94 text-[#FEF08A] text-xs font-bold px-2.5 py-1 shadow-md whitespace-nowrap border border-[#7DD3FC]/35">
             {ghostPreview.caption}
           </span>
         </div>
@@ -2309,12 +2694,14 @@ export const GameBoard: React.FC<GameBoardProps> = ({
 
       {/* EPIC BOSS ENCOUNTER & VICTORY CINEMATIC VIDEO */}
       {isBossLevel && level.boss && bossCinematic && (
-        <BossCinematicVideo
-          mode={bossCinematic}
-          boss={level.boss}
-          chapterId={level.chapterId}
-          onFinish={() => setBossCinematic(null)}
-        />
+        <Suspense fallback={null}>
+          <LazyBossCinematicVideo
+            mode={bossCinematic}
+            boss={level.boss}
+            chapterId={level.chapterId}
+            onFinish={() => setBossCinematic(null)}
+          />
+        </Suspense>
       )}
 
       {/* BOSS VICTORY CELEBRATION (KIBO HIGH-FIVE & CHEERING AFTER EPIC VIDEO!) */}
@@ -2354,7 +2741,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       {/* REGULAR STAGE VICTORY MODAL */}
       {solvedInfo && !isBossLevel && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/65 backdrop-blur-xs p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/82 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="victory-heading"
@@ -2413,6 +2800,30 @@ export const GameBoard: React.FC<GameBoardProps> = ({
                   </>
                 )}
               </div>
+
+              {solvedInfo.speedsterEarned ? (
+                <div className="mt-3 w-full rounded-2xl bg-gradient-to-r from-[#FEF3C7] via-[#FDE68A] to-[#FEF3C7] border-2 border-[#F59E0B] px-3.5 py-2.5 flex items-center justify-center gap-2.5 text-left animate-pop-in">
+                  <div className="w-8 h-8 rounded-xl bg-[#D97706] text-white flex items-center justify-center shrink-0">
+                    <Zap className="w-4.5 h-4.5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-display font-extrabold text-xs sm:text-sm text-[#92400E]">
+                      Medali Speedster Diraih!
+                    </div>
+                    <div className="text-[11px] font-bold text-[#78350F] tabular-nums">
+                      Selesai dalam {formatSeconds(solvedInfo.elapsedSec ?? 0)} (target{' '}
+                      {formatSeconds(solvedInfo.speedRunTargetSec ?? speedRunTargetSec)})
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                solvedInfo.elapsedSec !== undefined && (
+                  <div className="mt-3 text-xs font-bold text-[#4B7A91] tabular-nums">
+                    Waktu Speed Run: {formatSeconds(solvedInfo.elapsedSec)} (target Medali:{' '}
+                    {formatSeconds(solvedInfo.speedRunTargetSec ?? speedRunTargetSec)})
+                  </div>
+                )
+              )}
 
               <div className="mt-6 w-full flex flex-col sm:flex-row gap-2.5">
                 <button

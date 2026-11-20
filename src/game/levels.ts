@@ -16,9 +16,6 @@ const sym = (id: string, family: SymbolFamily, sign: 1 | -1 = 1): Term => ({
   sign,
 });
 
-const BOSS_TURTLE_ART = '/src/assets/images/boss_penjaga_batu_1795080568852.jpg';
-const BOSS_OWL_ART = '/src/assets/images/boss_raja_timbangan_1795080569789.jpg';
-
 // =========================================================================
 // CLEAN STRUCTURED STAGE BUILDERS (20 STAGES PER CHAPTER = 120 TOTAL)
 // Every single stage is mathematically verified for exact integer solutions.
@@ -919,7 +916,6 @@ export const CHAPTERS: ChapterDef[] = [
     title: 'Bab 0: Pantai Simbol Dasar',
     subtitle: 'Pahami konsep pindah ruas dan pasangan lawan tanpa angka sama sekali!',
     focusRule: 'Simbol Murni · Konsep Dasar',
-    artwork: '/src/assets/images/chapter_batu_lawan_1795079216185.jpg',
     levels: [
       {
         id: '0-1',
@@ -1013,7 +1009,6 @@ export const CHAPTERS: ChapterDef[] = [
           gimmickLabel: 'Gimmick: Biasa',
           gimmickDesc: 'Pertarungan simbol santai tanpa jebakan waktu.',
           timeLimitSeconds: 120,
-          artwork: BOSS_TURTLE_ART,
           introLine: 'E-eeh?! Kamu mau mendekat?! Jangan galak-galak ya... pecahkan simbolnya pelan-pelan saja!',
           tauntLines: [
             'Kyaaa! Jangan colek tentakelku, aku geli dan takut!',
@@ -1038,6 +1033,13 @@ export const CHAPTERS: ChapterDef[] = [
             victoryPreTos: 'Horeee! Cumi Cilik menyerah dengan sopan! Ayo tos sirip dulu buat kemenangan pertamamu!',
             victoryPostTos: 'TOS MANTAP! Bab 0 tuntas! Si Cumi janji mau latihan biar lebih berani suatu hari nanti!',
             defeatEncourage: 'Hihi, Cumi Cilik kabur duluan karena waktunya habis! Yuk kejar lagi, pasti langsung menang!',
+            lowTimeAlert: 'Eits, sisa 30 detik lagi! Ayo rapikan simbol lawan sebelum Cumi Cilik kabur!',
+            lowTimeCritical: 'CEPAT!! Tinggal 15 detik! Gabung pasangan simbol yang tersisa sekarang!',
+            lowTimeTapLines: [
+              'Waktunya tinggal sedikit! Tarik simbol yang sama ke seberang biar langsung hilang!',
+              'Jangan biarkan Cumi Cilik kabur! Fokus sisakan Peti Pusaka sendirian!',
+              'Sedikit lagi selesai kok, ayo ngebut dengan tenang!',
+            ],
           },
           phases: [
             {
@@ -1078,7 +1080,6 @@ export const CHAPTERS: ChapterDef[] = [
     title: 'Bab 1: Pulau Batu Angka',
     subtitle: 'Saatnya batu simbol membawa nilai angka! Gabungkan dan hapus menuju nol.',
     focusRule: 'Pembatalan Nol & Angka Awal',
-    artwork: '/src/assets/images/chapter_jembatan_ruas_1795079216463.jpg',
     levels: [
       {
         id: '1-1',
@@ -1174,9 +1175,9 @@ export const CHAPTERS: ChapterDef[] = [
         chapterId: 1,
         levelNumber: 20,
         title: 'Bos: Kapten Buntal Bajak Laut',
-        tip: 'Kalahkan 3 tantangan batu angka dari Kapten Buntal bertopi bajak laut!',
+        tip: 'Kalahkan 5 tantangan batu angka (5 HP) dari Kapten Buntal bertopi bajak laut!',
         defaultVisual: 'stones',
-        parMoves: 7,
+        parMoves: 13,
         isBoss: true,
         initial: {
           left: [v('b1p1_1', 1), c('b1p1_2', 4)],
@@ -1187,25 +1188,26 @@ export const CHAPTERS: ChapterDef[] = [
           role: 'Bos Bab 1 · Ikan Buntal Bajak Laut',
           personality: 'Iri',
           gimmick: 'speed_enrage',
-          gimmickLabel: 'Gimmick: Waktu 2× Saat 1 HP',
-          gimmickDesc: 'Saat tersisa 1 HP, Kapten Buntal mempercepat waktu 2× lipat!',
-          timeLimitSeconds: 120,
+          gimmickLabel: '5 HP · Waktu 2× Saat 1 HP',
+          gimmickDesc: 'Kapten Buntal punya 5 HP, dan saat tersisa 1 HP waktu berjalan 2× lipat!',
+          timeLimitSeconds: 150,
           enrageGimmickLine: 'TIDAK ADIL!! Tinggal 1 HP?! Kuputar jam pasir bajak lautku jadi 2× LEBIH CEPAT biar kamu panik!',
-          artwork: BOSS_OWL_ART,
-          introLine: 'Hmph! Enak banget kamu punya teman lucu kayak Kibo dan pintar berhitung! Aku juga mau dipuji!',
+          introLine: 'Hmph! Enak banget kamu punya teman lucu kayak Kibo dan pintar berhitung! Aku punya 5 nyawa bajak laut sekarang!',
           tauntLines: [
             'Jangan pamer bintangmu di depanku, bikin aku iri saja!',
             'Kenapa sih Kibo selalu dukung kamu? Topi bajak lautku padahal lebih keren!',
             'Huh! Kamu di Bab 0 kemarin pasti cuma lagi beruntung saja!',
           ],
           hitLines: [
-            'Iiih! Kok kamu bisa cepat banget?! Aku jadi makin iri!',
+            'Iiih! Kok kamu bisa cepat banget?! Baru hilang 1 nyawa, aku masih punya 4 HP!',
+            'Hmph! Baru 3 HP tersisa! Jangan senyum dulu di depan kapten bajak laut!',
+            'Grr!! Sisa 2 HP?! Kenapa Kibo terus-terusan memujimu sih?!',
             'TIDAK ADIL!! Sisa 1 HP?! Kuputar jam pasir bajak lautku jadi 2× LEBIH CEPAT!',
           ],
-          defeatLine: 'Pffft... aku kempes deh. Oke-oke, aku akui kamu memang lebih hebat dariku!',
+          defeatLine: 'Pffft... aku kempes deh. Oke-oke, meski 5 HP pun aku akui kamu memang lebih hebat dariku!',
           timeoutLine: 'Aha! Waktunya habis! Nah kan, kamu nggak sehebat yang Kibo banggakan! Sekarang giliran aku yang dipuji, hmph!',
           kiboLines: {
-            intro: 'Waduh, Kapten Buntal iri banget melihat kita kompak! Hati-hati kalau HP-nya tinggal 1 ya!',
+            intro: 'Waduh, Kapten Buntal datang dengan 5 HP penuh rasa iri! Hati-hati kalau HP-nya tinggal 1 ya!',
             tapLines: [
               'Psst! Kapten Buntal suka ngambek dan mempercepat jam saat tinggal 1 HP!',
               'Topi bajak lautnya keren sih, tapi kepintaranmu bikin dia makin iri!',
@@ -1213,13 +1215,20 @@ export const CHAPTERS: ChapterDef[] = [
             ],
             gimmickAlert: 'AWAS!! Kapten Buntal panik di 1 HP — waktu sekarang berjalan 2× LEBIH CEPAT! Gaspol!',
             hitCheer: 'DUAR! Kapten Buntal makin iri dan pipinya tambah gembung!',
-            victoryPreTos: 'PFFFT! Kapten Buntal kempes seperti balon pantai! Ayo tos dulu sama Kibo!',
-            victoryPostTos: 'TOS JUARA! Bahkan jam pasir 2× cepatnya nggak sanggup mengalahkan kecepatanmu!',
+            victoryPreTos: 'PFFFT! 5 HP Kapten Buntal kempes seperti balon pantai! Ayo tos dulu sama Kibo!',
+            victoryPostTos: 'TOS JUARA! Bahkan 5 HP dan jam pasir 2× cepatnya nggak sanggup mengalahkanmu!',
             defeatEncourage: 'Ups, jam pasir Kapten Buntal tadi kencang banget! Yuk balas biar dia nggak pamer lagi!',
+            lowTimeAlert: 'WADUH! Sisa 30 detik! Jangan biarkan jam pasir Kapten Buntal mengalahkan kita!',
+            lowTimeCritical: 'GASPOL!! Tinggal 15 detik lagi! Pindahkan batu angka terakhir secepat kilat!',
+            lowTimeTapLines: [
+              'Jam pasirnya makin cepat habis! Tarik batu angka ke seberang sekarang!',
+              'Ayo sedikit lagi! Kapten Buntal sudah mulai panik melihat kecepatanmu!',
+              'Fokus ke angka di sisi x ya, jangan ragu pindah ruas!',
+            ],
           },
           phases: [
             {
-              label: 'Fase 1: Pindah Surya',
+              label: 'Fase 1/5: Pindah Surya',
               tip: 'Pindahkan +4 ke ruas kanan lalu gabungkan dengan +9!',
               initial: {
                 left: [v('b1p1_1', 1), c('b1p1_2', 4)],
@@ -1227,7 +1236,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 2: Pindah Bulan',
+              label: 'Fase 2/5: Pindah Bulan',
               tip: 'Pindahkan −6 dari kanan ke kiri agar berubah menjadi +6!',
               initial: {
                 left: [c('b1p2_1', 5)],
@@ -1235,11 +1244,27 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 3: Jam Pasir 2× Cepat!',
+              label: 'Fase 3/5: Gabung & Pindah',
+              tip: 'Gabungkan +7 dan −3 di kiri, lalu pindahkan sisanya ke kanan!',
+              initial: {
+                left: [v('b1p3_1', 1), c('b1p3_2', 7), c('b1p3_3', -3)],
+                right: [c('b1p3_4', 12)],
+              },
+            },
+            {
+              label: 'Fase 4/5: Pusaka di Kanan',
+              tip: 'Gabungkan +4 dan +9 di kiri, lalu pindahkan +6 dari kanan ke kiri!',
+              initial: {
+                left: [c('b1p4_1', 4), c('b1p4_2', 9)],
+                right: [v('b1p4_3', 1), c('b1p4_4', 6)],
+              },
+            },
+            {
+              label: 'Fase 5/5: Jam Pasir 2× Cepat!',
               tip: 'Gabungkan +5 dan −2 di kiri, lalu pindahkan sisanya ke kanan!',
               initial: {
-                left: [v('b1p3_1', 1), c('b1p3_2', 5), c('b1p3_3', -2)],
-                right: [c('b1p3_4', 10)],
+                left: [v('b1p5_1', 1), c('b1p5_2', 5), c('b1p5_3', -2)],
+                right: [c('b1p5_4', 10)],
               },
             },
           ],
@@ -1351,9 +1376,9 @@ export const CHAPTERS: ChapterDef[] = [
         chapterId: 2,
         levelNumber: 20,
         title: 'Bos: Kepiting Manik-Manik Emas',
-        tip: 'Hadapi banjir angka super banyak dari Kepiting Emas yang kikir!',
+        tip: 'Hadapi banjir angka super banyak dan 5 HP brankas Kepiting Emas yang kikir!',
         defaultVisual: 'symbols',
-        parMoves: 24,
+        parMoves: 40,
         isBoss: true,
         initial: {
           left: [
@@ -1370,24 +1395,25 @@ export const CHAPTERS: ChapterDef[] = [
           role: 'Bos Bab 2 · Kepiting Manik-Manik Emas',
           personality: 'Kikir',
           gimmick: 'many_numbers',
-          gimmickLabel: 'Gimmick: Banjir Angka Emas',
-          gimmickDesc: 'Kepiting Kikir menumpuk sangat banyak kartu angka di kedua ruas!',
-          timeLimitSeconds: 120,
-          artwork: BOSS_TURTLE_ART,
-          introLine: 'Klak-klak! Awas jangan sentuh manik-manik emasku! Kutumpuk SEMUA koin angkaku di papan biar kamu pusing!',
+          gimmickLabel: '5 HP · Banjir Angka Emas',
+          gimmickDesc: 'Kepiting Kikir punya 5 HP dan menumpuk sangat banyak kartu angka di kedua ruas!',
+          timeLimitSeconds: 180,
+          introLine: 'Klak-klak! Awas jangan sentuh manik-manik emasku! Kutumpuk SEMUA 5 brankas koin angkaku di papan biar kamu pusing!',
           tauntLines: [
             'Hei! Jangan ketuk-ketuk, nanti manik-manik emasku lecet!',
             'Semuanya milikku! Lihat tumpukan angkaku—sebanyak harta karunku!',
             'Klak! Mau lewat? Hitung dulu segunung angka emasku tanpa keliru!',
           ],
           hitLines: [
-            'Aduh! Tumpukan koin pertamaku beres?! Rugi besar aku! Nih, kutambah lebih banyak lagi!',
+            'Aduh! Tumpukan koin pertamaku beres?! Rugi besar aku! Masih ada 4 brankas lagi!',
+            'Klak-klak! Sisa 3 HP — jangan harap bisa mengambil koin emasku dengan mudah!',
+            'TIDAK! Sisa 2 HP?! Kupanggil cadangan manik-manik negatif biar kamu bingung!',
             'JANGAN! Brankas emas terakhirku tinggal 1 HP—kubanjiri papan dengan semua angka simpananku!',
           ],
-          defeatLine: 'Klak... bangkrut sudah aku! Ambil saja bintangnya, tapi manik-manik emasku tetap kubawa pulang!',
+          defeatLine: 'Klak... bangkrut sudah 5 brankasku! Ambil saja bintangnya, tapi manik-manik emasku tetap kubawa pulang!',
           timeoutLine: 'Klak-klak-klak! Waktu habis! Kebanyakan angka ya? Semua koin emas tetap milikku sendiri!',
           kiboLines: {
-            intro: 'WAAAH! Kepiting Emas pelit banget sampai menumpuk segunung angka di papan! Ayo rapikan satu per satu!',
+            intro: 'WAAAH! Kepiting Emas punya 5 HP dan menumpuk segunung angka di papan! Ayo rapikan satu per satu!',
             tapLines: [
               'Gila, angka emasnya banyak banget! Gabungkan angka di sisi yang sama biar cepat rapi!',
               'Jangan silau sama manik-manik emasnya ya, fokus sisakan x sendirian!',
@@ -1395,13 +1421,20 @@ export const CHAPTERS: ChapterDef[] = [
             ],
             gimmickAlert: 'BANJIR ANGKA! Kepiting Emas menumpuk banyak sekali angka emas di kedua ruas!',
             hitCheer: 'KEREN! Gunung angka Kepiting Emas langsung ludes kamu bereskan!',
-            victoryPreTos: 'YEAY! Brankas angka Kepiting Emas berhasil kamu bongkar tuntas! Tos dulu yuk!',
-            victoryPostTos: 'TOS BERKILAU! Meski angkanya segunung, ketelitianmu tetap tak terkalahkan!',
+            victoryPreTos: 'YEAY! Kelima brankas angka Kepiting Emas berhasil kamu bongkar tuntas! Tos dulu yuk!',
+            victoryPostTos: 'TOS BERKILAU! Meski 5 fase angkanya segunung, ketelitianmu tetap tak terkalahkan!',
             defeatEncourage: 'Wah, angka Kepiting Emas memang super ramai! Coba gabungkan yang seruas dulu di percobaan berikut ya!',
+            lowTimeAlert: 'AYO KEJAR! Sisa 30 detik! Gabung cepat angka di satu ruas sebelum pindah!',
+            lowTimeCritical: 'TINGGAL 15 DETIK!! Segera bereskan sisa koin angka emas sebelum waktu habis!',
+            lowTimeTapLines: [
+              'Gabung angka seruas dulu biar cepat ringkas, waktu tinggal sedikit!',
+              'Jangan panik lihat angka ramai, langsung tabrakkan angka di ruas yang sama!',
+              'Sedikit lagi Kepiting Emas bangkrut! Ayo ngebut dengan teliti!',
+            ],
           },
           phases: [
             {
-              label: 'Fase 1: Tumpukan Koin Emas',
+              label: 'Fase 1/5: Tumpukan Koin Emas',
               tip: 'Gabungkan semua angka di ruas kiri dan kanan dulu sebelum pindah ruas!',
               initial: {
                 left: [
@@ -1415,7 +1448,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 2: Gudang Manik Negatif',
+              label: 'Fase 2/5: Gudang Manik Negatif',
               tip: 'Sederhanakan tumpukan angka di kedua ruas, lalu sisakan x sendirian di kanan!',
               initial: {
                 left: [
@@ -1435,23 +1468,62 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 3: Brankas Harta Raksasa',
-              tip: 'Gabungkan seluruh gunung angka di kiri dan kanan lalu seberangkan sisanya!',
+              label: 'Fase 3/5: Peti Koin Tengah',
+              tip: 'Gabung cepat angka di kiri (+16−9+7−4) dan kanan (22−11+6−3)!',
               initial: {
                 left: [
                   v('b2p3_1', 1),
-                  c('b2p3_2', 20),
-                  c('b2p3_3', -8),
-                  c('b2p3_4', 15),
-                  c('b2p3_5', -12),
-                  c('b2p3_6', 6),
+                  c('b2p3_2', 16),
+                  c('b2p3_3', -9),
+                  c('b2p3_4', 7),
+                  c('b2p3_5', -4),
                 ],
                 right: [
-                  c('b2p3_7', 18),
-                  c('b2p3_8', -9),
-                  c('b2p3_9', 14),
-                  c('b2p3_10', -6),
-                  c('b2p3_11', 10),
+                  c('b2p3_6', 22),
+                  c('b2p3_7', -11),
+                  c('b2p3_8', 6),
+                  c('b2p3_9', -3),
+                ],
+              },
+            },
+            {
+              label: 'Fase 4/5: Timbunan Kanan-Kiri',
+              tip: 'Ringkas dulu angka di kiri (13) dan kanan (+14), lalu seberangkan +14 ke kiri!',
+              initial: {
+                left: [
+                  c('b2p4_1', 19),
+                  c('b2p4_2', -7),
+                  c('b2p4_3', 5),
+                  c('b2p4_4', -12),
+                  c('b2p4_5', 8),
+                ],
+                right: [
+                  v('b2p4_6', 1),
+                  c('b2p4_7', 15),
+                  c('b2p4_8', -8),
+                  c('b2p4_9', 11),
+                  c('b2p4_10', -4),
+                ],
+              },
+            },
+            {
+              label: 'Fase 5/5: Brankas Harta Raksasa',
+              tip: 'Gabungkan seluruh gunung angka di kiri dan kanan lalu seberangkan sisanya!',
+              initial: {
+                left: [
+                  v('b2p5_1', 1),
+                  c('b2p5_2', 20),
+                  c('b2p5_3', -8),
+                  c('b2p5_4', 15),
+                  c('b2p5_5', -12),
+                  c('b2p5_6', 6),
+                ],
+                right: [
+                  c('b2p5_7', 18),
+                  c('b2p5_8', -9),
+                  c('b2p5_9', 14),
+                  c('b2p5_10', -6),
+                  c('b2p5_11', 10),
                 ],
               },
             },
@@ -1564,9 +1636,9 @@ export const CHAPTERS: ChapterDef[] = [
         chapterId: 3,
         levelNumber: 20,
         title: 'Bos: Kura-Kura Meriam Tempurung',
-        tip: 'Taklukkan 3 persamaan variabel x di kedua sisi dari Kura Meriam!',
+        tip: 'Taklukkan 5 persamaan variabel x di kedua sisi (5 HP) dari Kura Meriam!',
         defaultVisual: 'symbols',
-        parMoves: 10,
+        parMoves: 18,
         isBoss: true,
         initial: {
           left: [v('b3p1_1', 3)],
@@ -1577,26 +1649,27 @@ export const CHAPTERS: ChapterDef[] = [
           role: 'Bos Bab 3 · Kura-Kura Cannon Tempurung',
           personality: 'Malas',
           gimmick: 'freeze_penalty',
-          gimmickLabel: 'Waktu Beku',
-          gimmickDesc: 'Kura Meriam sedang tidur pulas di dalam tempurung.',
-          timeLimitSeconds: 120,
+          gimmickLabel: '5 HP · Waktu Beku',
+          gimmickDesc: 'Kura Meriam punya 5 HP dan sedang tidur pulas di dalam tempurung.',
+          timeLimitSeconds: 180,
           maxMistakes: 4,
           penaltySeconds: 30,
-          artwork: BOSS_OWL_ART,
-          introLine: 'Zzz... huaaahm... enaknya tidur siang di dalam tempurung... jamnya kubekukan saja ya, zzz...',
+          introLine: 'Zzz... huaaahm... enaknya tidur siang di dalam tempurung 5 lapis... jamnya kubekukan saja ya, zzz...',
           tauntLines: [
             'HEY! Gara-gara kamu colek aku jadi bangun deh! Sekarang jamnya jalan terus, tapi aturan salah 4× tetap berlaku ya!',
             'Zzz—eh aku sudah melek! Waktu jalan terus nih, jangan sampai salah pindah 4 kali juga ya!',
             'Aduh, tidur siangku terganggu! Jamnya kubiarkan berdetak, hati-hati salah pindah dipotong 30 detik!',
           ],
           hitLines: [
-            'Hoaaam... kena ya? Aduh malas banget bangun buat fase kedua...',
-            'Ugh, kamu teliti banget sih... satu lagi deh biar aku bisa lanjut tidur.',
+            'Hoaaam... kena 1 ya? Masih ada 4 lapis tempurung... malas banget bangun...',
+            'Ugh, 3 HP lagi ya... jangan cepat-cepat dong, aku masih ngantuk...',
+            'Huaaahm... sisa 2 HP... kamu teliti banget sih menghitung variabelnya...',
+            'Oke tinggal 1 HP terakhir... selesaikan cepat biar aku bisa lanjut tidur pulas...',
           ],
-          defeatLine: 'Akhirnya selesai juga... terima kasih ya, sekarang aku bisa tidur siang dengan tenang. Zzz...',
+          defeatLine: 'Akhirnya selesai juga 5 fasenya... terima kasih ya, sekarang aku bisa tidur siang dengan tenang. Zzz...',
           timeoutLine: 'Huaaahm... waktumu habis atau salah pindah 4 kali tuh! Aku balik tidur di tempurung lagi ah, zzz...',
           kiboLines: {
-            intro: 'Sst... Kura Meriam kelihatan lagi tidur pulas banget sampai jamnya ikut beku! Tetap hati-hati ya, salah pindah 4× tetap memotong 30 detik!',
+            intro: 'Sst... Kura Meriam punya 5 HP dan lagi tidur pulas sampai jamnya beku! Tetap hati-hati ya, salah pindah 4× tetap memotong 30 detik!',
             tapLines: [
               'Sst, pelan-pelan mikir dulu sebelum menggeser kartu ya!',
               'Hati-hati! Maksimal cuma boleh salah pindah 4 kali—tiap salah dipotong 30 detik!',
@@ -1604,13 +1677,20 @@ export const CHAPTERS: ChapterDef[] = [
             ],
             gimmickAlert: 'ADUH! Salah pindah ruas — Kura Meriam langsung memotong 30 detik waktumu! Tetap fokus ya!',
             hitCheer: 'TEPAT SEKALI! Kura Meriam sampai menguap lebar kena tembakan telitimu!',
-            victoryPreTos: 'MANTAP! Kamu sukses menaklukkan Kura Meriam dengan super teliti! Ayo tos santai sama Kibo!',
+            victoryPreTos: 'MANTAP! Kamu sukses menaklukkan 5 HP Kura Meriam dengan super teliti! Ayo tos santai sama Kibo!',
             victoryPostTos: 'TOS TELITI! Biarkan Kura Meriam lanjut tidur siang sementara kita melaju ke Bab 4!',
             defeatEncourage: 'Ups, Kura Meriam menang kali ini! Tenangkan pikiran dan perhatikan tanda tiap kartu sebelum menggeser ya!',
+            lowTimeAlert: 'HATI-HATI! Sisa 30 detik dan jangan sampai salah geser (−30 dtk)!',
+            lowTimeCritical: '15 DETIK LAGI!! Cek baik-baik sebelum menggeser kartu biar tidak kena potongan waktu!',
+            lowTimeTapLines: [
+              'Waktu mepet! Cek arah x dan angkanya dulu sebelum pindah agar tidak kena penalti −30 detik!',
+              'Tenang saja! Satu langkah yang tepat jauh lebih cepat daripada terburu-buru salah!',
+              'Fokus kumpulkan x di sisi yang lebih besar koefisiennya!',
+            ],
           },
           phases: [
             {
-              label: 'Fase 1: Satukan x (Waktu Beku)',
+              label: 'Fase 1/5: Satukan x (Waktu Beku)',
               tip: 'Pindahkan 2x ke ruas kiri dan gabungkan dengan 3x.',
               initial: {
                 left: [v('b3p1_1', 3)],
@@ -1618,7 +1698,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 2: Jinakkan −x (Waktu Beku)',
+              label: 'Fase 2/5: Jinakkan −x (Waktu Beku)',
               tip: 'Pindahkan +8 ke kanan, lalu balik tanda kedua ruas dengan "Balik ±"!',
               initial: {
                 left: [c('b3p2_1', 8), v('b3p2_2', -1)],
@@ -1626,11 +1706,27 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 3: Tukar Dua Sisi (Waktu Beku)',
-              tip: 'Kumpulkan x di kiri dan angka di kanan!',
+              label: 'Fase 3/5: Selisih Lima x',
+              tip: 'Pindahkan 4x ke kiri menjadi −4x, lalu pindahkan −4 ke kanan menjadi +4!',
               initial: {
-                left: [v('b3p3_1', 4), c('b3p3_2', -3)],
-                right: [v('b3p3_3', 3), c('b3p3_4', 5)],
+                left: [v('b3p3_1', 5), c('b3p3_2', -4)],
+                right: [v('b3p3_3', 4), c('b3p3_4', 6)],
+              },
+            },
+            {
+              label: 'Fase 4/5: Kumpulkan x di Kanan',
+              tip: 'Pindahkan 2x ke kanan dan +2 ke kiri agar x tetap positif!',
+              initial: {
+                left: [v('b3p4_1', 2), c('b3p4_2', 9)],
+                right: [v('b3p4_3', 3), c('b3p4_4', 2)],
+              },
+            },
+            {
+              label: 'Fase 5/5: Tukar Dua Sisi Pamungkas',
+              tip: 'Kumpulkan x di kiri (4x − 3x) dan angka di kanan (5 + 3)!',
+              initial: {
+                left: [v('b3p5_1', 4), c('b3p5_2', -3)],
+                right: [v('b3p5_3', 3), c('b3p5_4', 5)],
               },
             },
           ],
@@ -1742,9 +1838,9 @@ export const CHAPTERS: ChapterDef[] = [
         chapterId: 4,
         levelNumber: 20,
         title: 'Bos: Kapten Orca Mata Satu',
-        tip: 'Taklukkan 3 persamaan perkalian dan pembagian beruntun dari Kapten Orca!',
+        tip: 'Taklukkan 5 HP Kapten Orca (yang bisa pulih penuh 1×!) dengan jurus kali & bagi!',
         defaultVisual: 'symbols',
-        parMoves: 15,
+        parMoves: 28,
         isBoss: true,
         initial: {
           left: [v('b4p1_1', 4), c('b4p1_2', -3)],
@@ -1755,41 +1851,51 @@ export const CHAPTERS: ChapterDef[] = [
           role: 'Bos Bab 4 · Orca Bermata Satu',
           personality: 'Angkuh',
           gimmick: 'heal_once',
-          gimmickLabel: 'Gimmick: Pulih Penuh Saat 1 HP',
-          gimmickDesc: 'Saat sisa 1 HP, Kapten Orca kesal dan memulihkan seluruh HP-nya kembali penuh!',
-          timeLimitSeconds: 120,
-          healLine: 'CIH!! Aku KESAL!! Masa penguasa samudra tinggal 1 HP?! Kuaktifkan aura angkuh—HP-KU PULIH PENUH LAGI!!',
-          artwork: BOSS_TURTLE_ART,
-          introLine: 'Heh, cuma penantang kecil? Dengan satu mata tertutup pun aku seratus kali lebih cerdas dari semua ikan di samudra!',
+          gimmickLabel: '5 HP · Pulih Penuh Saat 1 HP',
+          gimmickDesc: 'Kapten Orca punya 5 HP, dan saat sisa 1 HP ia kesal lalu memulihkan seluruh 5 HP-nya kembali penuh!',
+          timeLimitSeconds: 210,
+          healLine: 'CIH!! Aku KESAL!! Masa penguasa samudra tinggal 1 HP?! Kuaktifkan aura angkuh—KELIMA HP-KU PULIH PENUH LAGI!!',
+          introLine: 'Heh, cuma penantang kecil? Dengan 5 HP dan satu mata tertutup pun aku seratus kali lebih cerdas dari semua ikan di samudra!',
           tauntLines: [
             'Beraninya menyentuh penguasa samudra! Tatap wibawaku yang tak tertandingi!',
             'Hmph, jurus kali dan bagimu masih terlalu lemah untuk levelku!',
             'Akulah yang terkuat di lautan—kamu hanyalah remahan ombak!',
           ],
           hitLines: [
-            'Tch! Cuma kebetulan semata! Jangan besar kepala dulu!',
-            'CIH!! Aku KESAL! HP-ku pulih penuh lagi—hadapi keseriusanku!',
-            'Grr! Masih berani menyerang setelah aku pulih?!',
-            'Mustahil! Bagaimana mungkin penantang kecil membuatku terdesak lagi?!',
+            'Tch! Baru hilang 1 dari 5 HP! Jangan besar kepala dulu!',
+            'Hmph! Masih 3 HP tersisa—seranganmu masih terlalu ringan!',
+            'Grr! Berani-beraninya membuatku tersisa 2 HP?!',
+            'CIH!! Aku KESAL! 5 HP-ku pulih penuh lagi—hadapi keseriusanku!',
+            'Grr! Masih berani menyerang setelah 5 HP-ku pulih penuh?!',
+            'Kuat juga jurus kalimu... tapi aku masih punya 3 nyawa!',
+            'Tidak mungkin! Sisa 2 HP lagi?! Aku penguasa samudra!!',
+            'Mustahil! Bagaimana mungkin penantang kecil membuatku terdesak di 1 HP lagi?!',
           ],
-          defeatLine: 'Hmph... tak kusangka ada yang sanggup menandingiku meski aku sudah pulih penuh. Baiklah, kau pantas kuhormati.',
+          defeatLine: 'Hmph... tak kusangka ada yang sanggup menandingiku meski 5 HP-ku sudah pulih penuh. Baiklah, kau pantas kuhormati.',
           timeoutLine: 'Hahaha! Waktu habis! Sudah kuduga, kelas kita terlalu jauh berbeda. Pulang dan berlatihlah lagi sebelum menantangku!',
           kiboLines: {
-            intro: 'Wih, Kapten Orca sombong banget! Firasat hiuku bilang dia nggak bakal rela kalah begitu saja saat sisa 1 HP...',
+            intro: 'Wih, Kapten Orca punya 5 HP dan sombong banget! Firasat hiuku bilang dia nggak bakal rela kalah begitu saja saat sisa 1 HP...',
             tapLines: [
-              'Lihat tuh gayanya angkuh banget! Jangan kaget kalau dia kesal dan memulihkan HP-nya!',
+              'Lihat tuh gayanya angkuh banget! Jangan kaget kalau dia kesal dan memulihkan 5 HP-nya!',
               'Tenang, jurus × ↔ ÷ kamu sudah makin mantap buat mematahkan kesombongannya!',
               'Kalau dia memulihkan HP, tetap semangat ya — dia cuma bisa melakukannya sekali!',
             ],
-            gimmickAlert: 'WAAAH!! Kapten Orca kesal banget sampai MEMULIHKAN HP-nya penuh lagi! Tenang, cuma sekali kok—ayo hantam lagi!',
+            gimmickAlert: 'WAAAH!! Kapten Orca kesal banget sampai MEMULIHKAN 5 HP-nya penuh lagi! Tenang, cuma sekali kok—ayo hantam lagi!',
             hitCheer: 'BOOOM! Kesombongan Kapten Orca langsung goyah kena jurus kali-bagimu!',
-            victoryPreTos: 'GOKIL!! Kapten Orca sudah memulihkan HP penuh tapi TETAP kamu kalahkan! Tos dulu!',
+            victoryPreTos: 'GOKIL!! Kapten Orca sudah memulihkan 5 HP penuh tapi TETAP kamu kalahkan! Tos dulu!',
             victoryPostTos: 'TOS PENGUASA LAUTAN! Akhirnya Kapten Orca mengakui kehebatanmu dan Kibo!',
-            defeatEncourage: 'Curang tuh Kapten Orca pakai pulih HP segala! Yuk tantang lagi, sekarang kita sudah tahu triknya!',
+            defeatEncourage: 'Curang tuh Kapten Orca pakai pulih 5 HP segala! Yuk tantang lagi, sekarang kita sudah tahu triknya!',
+            lowTimeAlert: 'AWAS WAKTU MENIPIS! Sisa 30 detik! Pindah tambah/kurang dulu baru kali/bagi!',
+            lowTimeCritical: '15 DETIK TERAKHIR!! Tumbangkan keangkuhan Kapten Orca sekarang juga!',
+            lowTimeTapLines: [
+              'Jangan lupa urutannya: pindah + / − dulu, baru tarik pengali × atau pembagi ÷!',
+              'Waktu tinggal sedikit, tetap fokus — Kapten Orca sudah hampir tumbang!',
+              'Hantam terus dengan jurus × ↔ ÷ kebanggaanmu!',
+            ],
           },
           phases: [
             {
-              label: 'Fase 1: Kali Menjadi Bagi',
+              label: 'Fase 1: Kali Menjadi Bagi (5/5 HP)',
               tip: 'Pindahkan −3 ke kanan dulu (jadi 16), lalu pindahkan ×4 → ÷4!',
               initial: {
                 left: [v('b4p1_1', 4), c('b4p1_2', -3)],
@@ -1797,7 +1903,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 2: Bagi Menjadi Kali',
+              label: 'Fase 2: Bagi Menjadi Kali (4/5 HP)',
               tip: 'Pindahkan −2 ke kanan (jadi 5), lalu pindahkan ÷3 → ×3!',
               initial: {
                 left: [v('b4p2_1', 1, 3), c('b4p2_2', -2)],
@@ -1805,27 +1911,59 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 3 (Pulih!): Pengali Lima',
-              tip: 'Pindahkan +4 ke kanan (jadi 15), lalu pindahkan ×5 → ÷5!',
+              label: 'Fase 3: Pengali Dua (3/5 HP)',
+              tip: 'Pindahkan +7 ke kanan (jadi 12), lalu pindahkan ×2 → ÷2!',
               initial: {
-                left: [v('b4p3_1', 5), c('b4p3_2', 4)],
+                left: [v('b4p3_1', 2), c('b4p3_2', 7)],
                 right: [c('b4p3_3', 19)],
               },
             },
             {
-              label: 'Fase 4 (Pulih!): Pecahan Empat',
-              tip: 'Pindahkan +3 ke kanan (jadi 3), lalu pindahkan ÷4 → ×4!',
+              label: 'Fase 4: Pecahan Lima (2/5 HP)',
+              tip: 'Pindahkan +4 ke kanan (jadi 3), lalu pindahkan ÷5 → ×5!',
               initial: {
-                left: [v('b4p4_1', 1, 4), c('b4p4_2', 3)],
-                right: [c('b4p4_3', 6)],
+                left: [v('b4p4_1', 1, 5), c('b4p4_2', 4)],
+                right: [c('b4p4_3', 7)],
               },
             },
             {
-              label: 'Fase 5: Koefisien Negatif Pamungkas',
+              label: 'Fase 5 (Pulih 5/5!): Pengali Lima',
+              tip: 'Pindahkan +4 ke kanan (jadi 15), lalu pindahkan ×5 → ÷5!',
+              initial: {
+                left: [v('b4p5_1', 5), c('b4p5_2', 4)],
+                right: [c('b4p5_3', 19)],
+              },
+            },
+            {
+              label: 'Fase 6 (Pulih 4/5!): Pecahan Empat',
+              tip: 'Pindahkan +3 ke kanan (jadi 3), lalu pindahkan ÷4 → ×4!',
+              initial: {
+                left: [v('b4p6_1', 1, 4), c('b4p6_2', 3)],
+                right: [c('b4p6_3', 6)],
+              },
+            },
+            {
+              label: 'Fase 7 (Pulih 3/5!): Pengali Negatif',
+              tip: 'Pindahkan +9 ke kanan (jadi −8), lalu pindahkan ×(−2) → ÷(−2)!',
+              initial: {
+                left: [v('b4p7_1', -2), c('b4p7_2', 9)],
+                right: [c('b4p7_3', 1)],
+              },
+            },
+            {
+              label: 'Fase 8 (Pulih 2/5!): Dua Ruas & Bagi',
+              tip: 'Kumpulkan x ke kiri (2x) dan angka ke kanan (14), lalu bagi 2!',
+              initial: {
+                left: [v('b4p8_1', 3), c('b4p8_2', -5)],
+                right: [v('b4p8_3', 1), c('b4p8_4', 9)],
+              },
+            },
+            {
+              label: 'Fase 9 (Pulih 1/5!): Pamungkas Negatif',
               tip: 'Pindahkan +4 ke kanan (jadi 9), lalu pindahkan ×(−3) → ÷(−3)!',
               initial: {
-                left: [v('b4p5_1', -3), c('b4p5_2', 4)],
-                right: [c('b4p5_3', 13)],
+                left: [v('b4p9_1', -3), c('b4p9_2', 4)],
+                right: [c('b4p9_3', 13)],
               },
             },
           ],
@@ -1937,7 +2075,7 @@ export const CHAPTERS: ChapterDef[] = [
         chapterId: 5,
         levelNumber: 20,
         title: 'Bos Akhir: Cthulhu Evolusi Cumi Cilik',
-        tip: 'Ujian puncak 10 HP melawan Cthulhu Samudra — di 5 HP masuk Mode Cosmic Rush 4× lebih cepat!',
+        tip: 'Ujian puncak 10 HP dalam 4 menit melawan Cthulhu Samudra — di 5 HP masuk Mode Cosmic Rush 2× lebih cepat!',
         defaultVisual: 'symbols',
         parMoves: 44,
         isBoss: true,
@@ -1950,12 +2088,11 @@ export const CHAPTERS: ChapterDef[] = [
           role: 'Bos Akhir · Evolusi Cumi Cilik Bab 0',
           personality: 'Marah',
           gimmick: 'cosmic_many_hp',
-          gimmickLabel: '10 HP · 4 Menit',
-          gimmickDesc: 'Ujian puncak 10 HP melawan Cthulhu Samudra!',
+          gimmickLabel: '10 HP · 4 Menit · Cosmic Rush 2×',
+          gimmickDesc: 'Ujian puncak 10 HP dalam 4 menit! Di 5 HP masuk Mode Cosmic Rush 2× lebih cepat!',
           timeLimitSeconds: 240,
           penaltySeconds: 5,
-          enrageGimmickLine: 'ROAAAAR!! 5 HP TERSISA?! SELAMAT DATANG DI MODE COSMIC RUSH — WAKTU MELESAT 4× LEBIH CEPAT!!',
-          artwork: BOSS_OWL_ART,
+          enrageGimmickLine: 'ROAAAAR!! 5 HP TERSISA?! SELAMAT DATANG DI MODE COSMIC RUSH — WAKTU MELESAT 2× LEBIH CEPAT!!',
           introLine: 'ROAAAR! INGAT AKU?! CUMI CILIK BAB 0 KINI BEREVOLUSI DENGAN 10 NYAWA PENUH AMARAH! RASAKAN KEKUATAN CTHULHU SAMUDRA!',
           tauntLines: [
             'BERANINYA KAU MENYENTUHKU?! KUPOTONG 5 DETIK WAKTUMU DENGAN AMARAH KOSMIK!',
@@ -1967,26 +2104,33 @@ export const CHAPTERS: ChapterDef[] = [
             'ARGH!! Jangan besar kepala—masih ada 8 nyawa kosmik di hadapanmu!!',
             'ROAAR!! Kedua sisi punya kurung sekarang! Sanggupkah kau menembusnya?!',
             'GHRAAH!! Rasakan kurung negatif dari dasar palung samudra!!',
-            'ROAAAAR!! 5 HP TERSISA?! MODE COSMIC RUSH AKTIF — WAKTU MELESAT 4× LEBIH CEPAT!!',
-            'TIDAK MUNGKIN!! Kau masih bertahan di kecepatan 4× Cosmic Rush?!',
+            'ROAAAAR!! 5 HP TERSISA?! MODE COSMIC RUSH AKTIF — WAKTU MELESAT 2× LEBIH CEPAT!!',
+            'TIDAK MUNGKIN!! Kau masih bertahan di kecepatan 2× Cosmic Rush?!',
             'GRRAAAH!! 3 NYAWA LAGI! BADAI GALAKSI MENGGULUNG PAPANMU!!',
             'MUSTAHIL!! 2 NYAWA TERSISA! KURUNG NEGATIF KOSMIK, HANCURKAN DIA!!',
-            'ROAAAAAR!! SATU NYAWA TERAKHIR!! KERAHKAN SEMUA KEMAMPUANMU DI COSMIC RUSH 4×!!',
+            'ROAAAAAR!! SATU NYAWA TERAKHIR!! KERAHKAN SEMUA KEMAMPUANMU DI COSMIC RUSH 2×!!',
           ],
-          defeatLine: 'Grrr... huff... 10 nyawa dan Cosmic Rush 4× pun kau taklukkan. Baiklah... meski berevolusi jadi Cthulhu, kamu tetap juara sejati!',
-          timeoutLine: 'MWUAHAHAHA!! WAKTU HABIS!! MODE COSMIC RUSH 4× DAN 10 NYAWA CTHULHU TERLALU DAHSYAT UNTUKMU!',
+          defeatLine: 'Grrr... huff... 10 nyawa dan Cosmic Rush 2× pun kau taklukkan. Baiklah... meski berevolusi jadi Cthulhu, kamu tetap juara sejati!',
+          timeoutLine: 'MWUAHAHAHA!! WAKTU HABIS!! MODE COSMIC RUSH 2× DAN 10 NYAWA CTHULHU TERLALU DAHSYAT UNTUKMU!',
           kiboLines: {
             intro: 'GAWAT!! Cumi Cilik Bab 0 berevolusi jadi Cthulhu Samudra dengan 10 HP!! Kita punya 4 menit penuh — ayo kerahkan semua ilmu pindah ruas kita!',
             tapLines: [
               'Fokus buka kurung satu per satu dengan tenang — kita punya 4 menit penuh!',
-              'Hati-hati kalau nyawanya tinggal setengah, aura kosmiknya bikin waktu melesat jauh lebih cepat!',
+              'Hati-hati kalau nyawanya tinggal setengah, Cosmic Rush 2× bikin waktu jalan dua kali lebih cepat!',
               '10 HP memang ujian terakhir yang berat, tapi Kibo yakin kita pasti bisa menaklukkannya!',
             ],
-            gimmickAlert: 'AWAS!! MODE COSMIC RUSH 4× AKTIF DI 5 HP!! Waktu melesat 4× CEPAT — ngebut dengan teliti!!',
+            gimmickAlert: 'AWAS!! MODE COSMIC RUSH 2× AKTIF DI 5 HP!! Waktu melesat 2× CEPAT — ngebut dengan teliti!!',
             hitCheer: 'HEBAT!! Satu perisai kosmik Cthulhu jebol! Lanjut fase berikutnya dengan cepat!',
-            victoryPreTos: 'DEWA ALJABAR!! Kamu menaklukkan 10 HP dan COSMIC RUSH 4× Cthulhu Samudra!! AYO TOS PALING EPIK SAMA KIBO!!',
+            victoryPreTos: 'DEWA ALJABAR!! Kamu menaklukkan 10 HP dan COSMIC RUSH 2× Cthulhu Samudra!! AYO TOS PALING EPIK SAMA KIBO!!',
             victoryPostTos: 'TOS SUPERNOVA!! Rekor terhebat di seluruh Samudra Setara! Kibo super bangga sama kamu!',
             defeatEncourage: 'Cthulhu dengan 10 HP memang ujian terakhir paling dahsyat! Tarik napas dulu, atur ritme, dan kita kalahkan dia bersama!',
+            lowTimeAlert: 'WASPADA!! Sisa 30 detik!! Jangan sentuh Cthulhu (nanti −5 dtk), fokus buka kurung sekarang!',
+            lowTimeCritical: 'KRITIS 15 DETIK!! Kerahkan jurus pamungkas — Kibo bersamamu sampai detik terakhir!!',
+            lowTimeTapLines: [
+              'Waktunya tinggal sedikit dan ingat jangan colek Cthulhu! Langsung selesaikan persamaannya!',
+              'Kibo di sini menyorakimu! Buka kurung lalu satukan x di satu sisi secepat mungkin!',
+              'Ayo Juara Samudra!! Sedikit lagi evolusi raksasa Cthulhu tumbang di tanganmu!',
+            ],
           },
           phases: [
             {
@@ -2030,7 +2174,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 6/10: COSMIC RUSH 4×! (5 HP)',
+              label: 'Fase 6/10: COSMIC RUSH 2×! (5 HP)',
               tip: 'Buka kedua kurung 3(2x − 1) dan 2(x + 4), gabung angka tiap ruas, lalu satukan x!',
               initial: {
                 left: [g('b5p6_1', 3, 2, -1), c('b5p6_2', -4)],
@@ -2038,7 +2182,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 7/10: COSMIC RUSH 4×! (4 HP)',
+              label: 'Fase 7/10: COSMIC RUSH 2×! (4 HP)',
               tip: 'Buka kurung −3(x + 2) dan 2(x − 6), gabung +14 di kiri, lalu kumpulkan x!',
               initial: {
                 left: [g('b5p7_1', -3, 1, 2), c('b5p7_2', 14)],
@@ -2046,7 +2190,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 8/10: COSMIC RUSH 4×! (3 HP)',
+              label: 'Fase 8/10: COSMIC RUSH 2×! (3 HP)',
               tip: 'Buka kedua kurung 5(x − 3) dan 3(x + 4), gabung +2x di kiri & −7 di kanan!',
               initial: {
                 left: [g('b5p8_1', 5, 1, -3), v('b5p8_2', 2)],
@@ -2054,7 +2198,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 9/10: COSMIC RUSH 4×! (2 HP)',
+              label: 'Fase 9/10: COSMIC RUSH 2×! (2 HP)',
               tip: 'Buka −4(x − 3) jadi −4x + 12 dan 2(x − 7) jadi 2x − 14, gabung −2 lalu satukan x!',
               initial: {
                 left: [g('b5p9_1', -4, 1, -3), c('b5p9_2', -2)],
@@ -2062,7 +2206,7 @@ export const CHAPTERS: ChapterDef[] = [
               },
             },
             {
-              label: 'Fase 10/10: FINAL COSMIC RUSH 4×!',
+              label: 'Fase 10/10: FINAL COSMIC RUSH 2×!',
               tip: 'Buka 4(2x − 3) dan 2(x + 6), gabung −3x di kiri & −9 di kanan, lalu selesaikan x!',
               initial: {
                 left: [g('b5p10_1', 4, 2, -3), v('b5p10_2', -3)],

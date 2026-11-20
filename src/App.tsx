@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Award,
   BookOpen,
@@ -15,24 +15,42 @@ import {
   Shuffle,
   Star,
 } from 'lucide-react';
-import { AnimatedKibo } from './components/AnimatedKibo';
 import { BeachBackdrop } from './components/BeachBackdrop';
-import { GameBoard } from './components/GameBoard';
-import { KiboAvatar } from './components/KiboCompanion';
-import { KiboIntroVideo } from './components/KiboIntroVideo';
+import { BeachEasterEggs } from './components/BeachEasterEggs';
+import { DailyMissionsCard } from './components/DailyMissionsCard';
+import { KiboAvatar, KiboSpecialEndingModal } from './components/KiboCompanion';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { PocketGuide } from './components/PocketGuide';
-import { ProfileBadgesCard } from './components/ProfileBadgesCard';
 import { PWAInstallButton } from './components/PWAInstallButton';
-import { ExitConfirmModal, SettingsModal } from './components/SettingsExitModals';
-import { TreasureMap } from './components/TreasureMap';
+import { SettingsModal } from './components/SettingsExitModals';
 import { evaluateBadges } from './game/achievements';
 import { generatePracticeLevel } from './game/algebraEngine';
+import {
+  EvaluatedDailyMission,
+  createFreshDailyProgress,
+  evaluateDailyMissions,
+} from './game/dailyMissions';
+import { getInitialLobbyKiboLine } from './game/kiboDialogues';
 import { ALL_LEVELS, CHAPTERS, getNextLevel } from './game/levels';
 import { phonkMusic } from './game/phonkMusic';
 import { sound } from './game/sound';
 import { stageMusic } from './game/stageMusic';
 import { LevelDef, ProgressStore } from './game/types';
+
+const GameBoard = lazy(() =>
+  import('./components/GameBoard').then((m) => ({ default: m.GameBoard }))
+);
+const KiboIntroVideo = lazy(() =>
+  import('./components/KiboIntroVideo').then((m) => ({ default: m.KiboIntroVideo }))
+);
+const TreasureMap = lazy(() =>
+  import('./components/TreasureMap').then((m) => ({ default: m.TreasureMap }))
+);
+const PocketGuide = lazy(() =>
+  import('./components/PocketGuide').then((m) => ({ default: m.PocketGuide }))
+);
+const ProfileBadgesCard = lazy(() =>
+  import('./components/ProfileBadgesCard').then((m) => ({ default: m.ProfileBadgesCard }))
+);
 
 type GameScreen = 'LOBBY' | 'MAP' | 'ARCADE' | 'CODEX' | 'BADGES';
 
@@ -44,6 +62,7 @@ function loadProgress(): ProgressStore {
     retryCount: 0,
     totalTransposes: 0,
     noHintBossWins: 0,
+    speedsterCount: 0,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -61,6 +80,7 @@ function loadProgress(): ProgressStore {
           typeof parsed.sfxVolume === 'number'
             ? Math.max(0, Math.min(1, parsed.sfxVolume))
             : 0.85,
+        speedRunEnabled: Boolean(parsed.speedRunEnabled),
         stats: {
           flawlessStageIds: Array.isArray(parsed.stats?.flawlessStageIds)
             ? parsed.stats.flawlessStageIds
@@ -71,7 +91,10 @@ function loadProgress(): ProgressStore {
             typeof parsed.stats?.totalTransposes === 'number' ? parsed.stats.totalTransposes : 0,
           noHintBossWins:
             typeof parsed.stats?.noHintBossWins === 'number' ? parsed.stats.noHintBossWins : 0,
+          speedsterCount:
+            typeof parsed.stats?.speedsterCount === 'number' ? parsed.stats.speedsterCount : 0,
         },
+        daily: createFreshDailyProgress(parsed.daily),
       };
     }
   } catch {
@@ -83,7 +106,9 @@ function loadProgress(): ProgressStore {
     soundEnabled: true,
     musicVolume: 0.7,
     sfxVolume: 0.85,
+    speedRunEnabled: false,
     stats: defaultStats,
+    daily: createFreshDailyProgress(),
   };
 }
 
@@ -95,11 +120,12 @@ export default function App() {
   const [progress, setProgress] = useState<ProgressStore>(() => loadProgress());
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [lobbyKiboLine, setLobbyKiboLine] = useState<string | null>(null);
+  const [lobbyRuleIdx, setLobbyRuleIdx] = useState(0);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [exitedGame, setExitedGame] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
+  const [specialEndingOpen, setSpecialEndingOpen] = useState(false);
   const [recentBadgeToast, setRecentBadgeToast] = useState<{
     title: string;
     kiboPraise: string;
@@ -111,6 +137,13 @@ export default function App() {
       if (badgeToastTimerRef.current) window.clearTimeout(badgeToastTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!activeLevel && progress.daily?.specialEndingUnlocked && !progress.daily?.specialEndingSeen) {
+      sound.playVictory();
+      setSpecialEndingOpen(true);
+    }
+  }, [activeLevel, progress.daily?.specialEndingUnlocked, progress.daily?.specialEndingSeen]);
 
   // Sync audio volumes & persistence
   useEffect(() => {
@@ -124,7 +157,9 @@ export default function App() {
     }
   }, [progress]);
 
-  // Always-active tropical beach stage music outside Boss levels (and unlock on first gesture)
+  const activeThemeChapter = screen === 'MAP' ? selectedChapterId : 0;
+
+  // Always-active tropical beach stage music outside Boss levels (Lobby/Bab 0 use original song; Bab 1-5 use unique songs)
   useEffect(() => {
     if (exitedGame) {
       stageMusic.stop();
@@ -133,15 +168,16 @@ export default function App() {
     }
 
     const inBoss = !!activeLevel?.isBoss;
+    const activeMusicTheme = activeLevel ? activeLevel.chapterId : screen === 'MAP' ? selectedChapterId : 0;
     if (!inBoss) {
       phonkMusic.stop();
-      stageMusic.start();
+      stageMusic.start(activeMusicTheme);
     }
 
     const unlockAudio = () => {
       if (exitedGame) return;
       if (!activeLevel?.isBoss) {
-        stageMusic.start();
+        stageMusic.start(activeMusicTheme);
       }
     };
 
@@ -151,7 +187,7 @@ export default function App() {
       window.removeEventListener('pointerdown', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);
     };
-  }, [activeLevel, exitedGame]);
+  }, [activeLevel, exitedGame, screen, selectedChapterId]);
 
   const totalStars = useMemo(
     () => Object.values(progress.completed).reduce((sum, item) => sum + item.stars, 0),
@@ -191,24 +227,37 @@ export default function App() {
     setScreen('LOBBY');
   };
 
-  const handleConfirmExit = () => {
-    setExitConfirmOpen(false);
+  const handleConfirmExit = async () => {
     setSettingsOpen(false);
     stageMusic.stop();
     phonkMusic.stop();
 
-    // Native Android Capacitor exit if available
+    // Native Android Capacitor exit (supports Capacitor App plugin & bridge)
     const cap = (
       window as unknown as {
-        Capacitor?: { Plugins?: { App?: { exitApp?: () => void } } };
+        Capacitor?: {
+          Plugins?: { App?: { exitApp?: () => Promise<void> | void } };
+          nativePromise?: (pluginName: string, methodName: string) => Promise<void>;
+        };
       }
     ).Capacitor;
-    if (cap?.Plugins?.App?.exitApp) {
-      try {
-        cap.Plugins.App.exitApp();
-      } catch {
-        // Fallback below
+
+    try {
+      if (cap?.Plugins?.App?.exitApp) {
+        await cap.Plugins.App.exitApp();
+      } else if (cap?.nativePromise) {
+        await cap.nativePromise('App', 'exitApp');
       }
+    } catch {
+      // Fallback below if running in web browser
+    }
+
+    // Legacy Cordova / Android WebView navigator fallback
+    try {
+      const navApp = (navigator as unknown as { app?: { exitApp?: () => void } }).app;
+      navApp?.exitApp?.();
+    } catch {
+      // Ignore
     }
 
     try {
@@ -240,11 +289,24 @@ export default function App() {
     }
   };
 
+  const handleToggleSpeedRun = () => {
+    setProgress((prev) => ({
+      ...prev,
+      speedRunEnabled: !prev.speedRunEnabled,
+    }));
+  };
+
   const handleCompleteLevel = (
     level: LevelDef,
     moves: number,
     stars: number,
-    meta?: { flawless: boolean; usedHint: boolean; transposes: number }
+    meta?: {
+      flawless: boolean;
+      usedHint: boolean;
+      transposes: number;
+      elapsedSec?: number;
+      speedsterEarned?: boolean;
+    }
   ) => {
     setProgress((prev) => {
       const prevFlawless = prev.stats.flawlessStageIds;
@@ -256,6 +318,16 @@ export default function App() {
         totalTransposes: prev.stats.totalTransposes + (meta?.transposes ?? 0),
         noHintBossWins:
           prev.stats.noHintBossWins + (level.isBoss && !meta?.usedHint ? 1 : 0),
+        speedsterCount: prev.stats.speedsterCount + (meta?.speedsterEarned ? 1 : 0),
+      };
+
+      const freshDaily = createFreshDailyProgress(prev.daily);
+      const updatedDaily = {
+        ...freshDaily,
+        transposesToday: freshDaily.transposesToday + (meta?.transposes ?? 0),
+        stagesToday: freshDaily.stagesToday + 1,
+        practiceToday: freshDaily.practiceToday + (level.isPractice ? 1 : 0),
+        flawlessToday: freshDaily.flawlessToday + (meta?.flawless ? 1 : 0),
       };
 
       let nextState: ProgressStore;
@@ -264,24 +336,92 @@ export default function App() {
           ...prev,
           practiceSolved: prev.practiceSolved + 1,
           stats: nextStats,
+          daily: updatedDaily,
         };
       } else {
         const existing = prev.completed[level.id];
         const bestStars = Math.max(existing?.stars ?? 0, stars);
         const bestMoves = existing ? Math.min(existing.bestMoves, moves) : moves;
+        const bestTimeSec =
+          typeof meta?.elapsedSec === 'number'
+            ? typeof existing?.bestTimeSec === 'number'
+              ? Math.min(existing.bestTimeSec, meta.elapsedSec)
+              : meta.elapsedSec
+            : existing?.bestTimeSec;
+        const speedster = Boolean(existing?.speedster || meta?.speedsterEarned);
         nextState = {
           ...prev,
           completed: {
             ...prev.completed,
-            [level.id]: { stars: bestStars, bestMoves },
+            [level.id]: { stars: bestStars, bestMoves, bestTimeSec, speedster },
           },
           stats: nextStats,
+          daily: updatedDaily,
+        };
+      }
+
+      const evaluatedDaily = evaluateDailyMissions(nextState);
+      if (
+        evaluatedDaily.every((m) => m.completed) &&
+        updatedDaily.lastCompletedDateKey !== updatedDaily.dateKey
+      ) {
+        const nextStreak = updatedDaily.streakDays + 1;
+        const unlockedNow = Boolean(updatedDaily.specialEndingUnlocked || nextStreak >= 7);
+        nextState = {
+          ...nextState,
+          daily: {
+            ...updatedDaily,
+            streakDays: nextStreak,
+            lastCompletedDateKey: updatedDaily.dateKey,
+            specialEndingUnlocked: unlockedNow,
+          },
         };
       }
 
       announceNewBadges(prev, nextState);
       return nextState;
     });
+  };
+
+  const handleClaimDailyMission = (mission: EvaluatedDailyMission) => {
+    if (!mission.completed || mission.claimed) return;
+    sound.playVictory();
+    setProgress((prev) => {
+      const freshDaily = createFreshDailyProgress(prev.daily);
+      if (freshDaily.claimedIds.includes(mission.id)) return prev;
+
+      const nextDaily = {
+        ...freshDaily,
+        claimedIds: [...freshDaily.claimedIds, mission.id],
+        bonusPoints: freshDaily.bonusPoints + mission.bonusPoints,
+      };
+
+      const nextStats = {
+        ...prev.stats,
+        totalTransposes:
+          mission.badgeBoostKind === 'transpose'
+            ? prev.stats.totalTransposes + mission.badgeBoostAmount
+            : prev.stats.totalTransposes,
+      };
+
+      const nextPractice =
+        mission.badgeBoostKind === 'practice'
+          ? prev.practiceSolved + mission.badgeBoostAmount
+          : prev.practiceSolved;
+
+      const nextState: ProgressStore = {
+        ...prev,
+        practiceSolved: nextPractice,
+        stats: nextStats,
+        daily: nextDaily,
+      };
+
+      announceNewBadges(prev, nextState);
+      return nextState;
+    });
+    setLobbyKiboLine(
+      `Yeay! Kamu klaim ${mission.bonusPoints} Poin Bonus & ${mission.badgeBoostLabel} dari misi "${mission.title}"!`
+    );
   };
 
   const handleRetryStage = () => {
@@ -330,7 +470,7 @@ export default function App() {
         <BeachBackdrop />
         <div className="relative z-10 w-full max-w-md rounded-3xl game-panel p-7 text-center shadow-2xl animate-pop-in">
           <div className="flex flex-col items-center">
-            <AnimatedKibo size="xl" mood="crying" interactive={false} />
+            <KiboAvatar size="lg" mood="crying" interactive={false} />
             <h1 className="mt-4 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]">
               Sampai Jumpa Lagi!
             </h1>
@@ -359,12 +499,14 @@ export default function App() {
   if (showIntro) {
     return (
       <>
-        <KiboIntroVideo
-          onFinish={() => {
-            setShowIntro(false);
-            stageMusic.start();
-          }}
-        />
+        <Suspense fallback={null}>
+          <KiboIntroVideo
+            onFinish={() => {
+              setShowIntro(false);
+              stageMusic.start(screen === 'MAP' ? selectedChapterId : 0);
+            }}
+          />
+        </Suspense>
         <OfflineIndicator />
       </>
     );
@@ -385,16 +527,20 @@ export default function App() {
           setActiveLevel(null);
           setShowIntro(true);
         }}
-        onRequestExit={() => {
-          setSettingsOpen(false);
-          setExitConfirmOpen(true);
-        }}
+        onRequestExit={handleConfirmExit}
         onClose={() => setSettingsOpen(false)}
       />
-      <ExitConfirmModal
-        open={exitConfirmOpen}
-        onStay={() => setExitConfirmOpen(false)}
-        onConfirmExit={handleConfirmExit}
+      <KiboSpecialEndingModal
+        open={specialEndingOpen}
+        streakDays={progress.daily?.streakDays ?? 7}
+        bonusPoints={progress.daily?.bonusPoints ?? 0}
+        onClose={() => {
+          setSpecialEndingOpen(false);
+          setProgress((prev) => ({
+            ...prev,
+            daily: prev.daily ? { ...prev.daily, specialEndingSeen: true } : prev.daily,
+          }));
+        }}
       />
     </>
   );
@@ -427,23 +573,27 @@ export default function App() {
     const nextLvl = activeLevel.isPractice ? null : getNextLevel(activeLevel.id);
     return (
       <>
-        <GameBoard
-          level={activeLevel}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onExit={() => setActiveLevel(null)}
-          onComplete={handleCompleteLevel}
-          onRetryStage={handleRetryStage}
-          onNextLevel={() => {
-            if (nextLvl) {
-              setSelectedChapterId(nextLvl.chapterId);
-              setActiveLevel(nextLvl);
-            } else {
-              setActiveLevel(null);
-            }
-          }}
-          hasNextLevel={!!nextLvl}
-          onNewPractice={() => setActiveLevel(generatePracticeLevel(practiceDifficulty))}
-        />
+        <Suspense fallback={null}>
+          <GameBoard
+            level={activeLevel}
+            speedRunEnabled={!!progress.speedRunEnabled}
+            onToggleSpeedRun={handleToggleSpeedRun}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onExit={() => setActiveLevel(null)}
+            onComplete={handleCompleteLevel}
+            onRetryStage={handleRetryStage}
+            onNextLevel={() => {
+              if (nextLvl) {
+                setSelectedChapterId(nextLvl.chapterId);
+                setActiveLevel(nextLvl);
+              } else {
+                setActiveLevel(null);
+              }
+            }}
+            hasNextLevel={!!nextLvl}
+            onNewPractice={() => setActiveLevel(generatePracticeLevel(practiceDifficulty))}
+          />
+        </Suspense>
         {badgeToast}
         {modals}
         <OfflineIndicator />
@@ -452,11 +602,20 @@ export default function App() {
   }
 
   return (
-    <div className="relative min-h-[100dvh] flex flex-col game-canvas-bg text-[#0D354C] pb-20 md:pb-6">
-      <BeachBackdrop />
+    <div
+      className={`relative min-h-[100dvh] flex flex-col game-canvas-bg game-canvas-ch-${activeThemeChapter} text-[#0D354C] pb-20 md:pb-6`}
+    >
+      <BeachBackdrop chapterId={activeThemeChapter} />
+      {screen === 'LOBBY' && (
+        <BeachEasterEggs
+          variant="lobby"
+          chapterId={selectedChapterId}
+          onTriggerKibo={(quip) => setLobbyKiboLine(quip)}
+        />
+      )}
 
       {/* COASTAL ANDROID GAME TOP STATUS HUD */}
-      <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/92 backdrop-blur-md border-b-2 border-[#7DD3FC]/55 text-white shadow-md">
+      <header className="sticky top-0 z-30 h-14 bg-[#0D4A6B]/96 border-b-2 border-[#7DD3FC]/55 text-white shadow-md">
         <div className="max-w-6xl mx-auto h-full px-3.5 sm:px-6 flex items-center justify-between gap-4">
           {/* Game Crest */}
           <button
@@ -536,12 +695,12 @@ export default function App() {
       </header>
 
       {/* MAIN GAME SCREEN */}
-      <main className="relative z-10 flex-1 flex flex-col">
+      <main className={`relative z-10 flex-1 flex flex-col ${screen === 'LOBBY' ? 'pointer-events-none' : ''}`}>
         {/* SCREEN 1: TROPICAL BEACH GAME LOBBY */}
         {screen === 'LOBBY' && (
           <div className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
             {/* Left / Center Mobile Game Start Panel */}
-            <section className="lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left">
+            <section className="pointer-events-auto lg:col-span-6 flex flex-col items-center lg:items-start text-center lg:text-left">
               {/* Kibo Podium Card */}
               <div className="w-full rounded-3xl game-panel p-4 sm:p-5 flex items-center gap-4 text-left">
                 <KiboAvatar
@@ -562,13 +721,25 @@ export default function App() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-extrabold text-[#0284C7]">Kibo si Hiu Gemoy</div>
-                  <p className="mt-1 text-sm sm:text-base font-semibold text-[#0D354C] leading-snug">
-                    {lobbyKiboLine
-                      ? `“${lobbyKiboLine}”`
-                      : completedCount === 0
-                        ? '“Halo! Ayo main di Pantai Bab 0 dulu — seru belajar simbol tanpa angka!”'
-                        : `“Keren! Kamu sudah tuntas ${completedCount} stage & ${bossesDefeated} Bos! Lanjut yuk!”`}
-                  </p>
+                  {(() => {
+                    const activeLobbyText =
+                      lobbyKiboLine ??
+                      getInitialLobbyKiboLine(selectedChapterId, completedCount, bossesDefeated);
+                    return (
+                      <div
+                        key={activeLobbyText}
+                        className="relative mt-1.5 ml-1.5 rounded-2xl bg-[#EBF8FF] border-2 border-[#7DD3FC] px-3.5 py-2 shadow-sm speech-bubble-pop"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-2 top-3.5 w-3.5 h-3.5 rotate-45 bg-[#EBF8FF] border-l-2 border-b-2 border-[#7DD3FC]"
+                        />
+                        <p className="relative z-10 text-sm sm:text-base font-semibold text-[#0D354C] leading-snug">
+                          “{activeLobbyText}”
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -667,23 +838,69 @@ export default function App() {
               </div>
             </section>
 
-            {/* Right: Board Showcase + Quick Chapter Strip */}
-            <section className="lg:col-span-6 space-y-4">
-              <div className="rounded-3xl overflow-hidden border-3 border-[#FFFFFF]/85 bg-[#E0F2FE] shadow-xl aspect-[16/10]">
-                {!heroImgFailed ? (
-                  <img
-                    src="/src/assets/images/hero_setara_board_1795079216335.jpg"
-                    alt="Papan timbangan batu ukir Nusantara Setara"
-                    referrerPolicy="no-referrer"
-                    onError={() => setHeroImgFailed(true)}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center font-display text-3xl font-extrabold text-[#0284C7]">
-                    SETARA
+            {/* Right: Interactive Board Showcase + Quick Chapter Strip */}
+            <section className="pointer-events-auto lg:col-span-6 space-y-4">
+              {(() => {
+                const LOBBY_RULES = [
+                  { badge: '+3 ⇄ −3', hint: 'Tambah menyeberang jadi Kurang!', eq: 'x + 3 = 8  →  x = 8 − 3' },
+                  { badge: '−4 ⇄ +4', hint: 'Kurang menyeberang jadi Tambah!', eq: 'x − 4 = 5  →  x = 5 + 4' },
+                  { badge: '×2 ⇄ ÷2', hint: 'Kali menyeberang jadi Bagi!', eq: '2x = 12  →  x = 12 ÷ 2' },
+                  { badge: '÷5 ⇄ ×5', hint: 'Bagi menyeberang jadi Kali!', eq: 'x/5 = 3  →  x = 3 × 5' },
+                ];
+                const activeRule = LOBBY_RULES[lobbyRuleIdx % LOBBY_RULES.length];
+                return (
+                  <div className="relative rounded-3xl overflow-hidden border-3 border-[#FFFFFF]/85 bg-[#E0F2FE] shadow-xl aspect-[16/10] group">
+                    {!heroImgFailed ? (
+                      <img
+                        src="/src/assets/images/hero_setara_board_1795079216335.jpg"
+                        alt="Papan timbangan batu ukir Nusantara Setara"
+                        referrerPolicy="no-referrer"
+                        onError={() => setHeroImgFailed(true)}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-display text-3xl font-extrabold text-[#0284C7]">
+                        SETARA
+                      </div>
+                    )}
+
+                    {/* Floating Animated Portal Badge */}
+                    <div
+                      className="anime-lobby-float pointer-events-none absolute top-3 left-3 rounded-xl bg-[#0D4A6B]/90 border border-[#7DD3FC]/70 text-white px-2.5 py-1.5 flex items-center gap-1.5 shadow-md"
+                      style={{ animationDuration: '4.2s' }}
+                    >
+                      <span className="w-6 h-6 rounded-lg bg-[#FBBF24] text-[#291802] font-display font-extrabold text-base flex items-center justify-center">
+                        =
+                      </span>
+                      <span className="text-[11px] font-extrabold text-[#FEF08A]">Jembatan Ruas</span>
+                    </div>
+
+                    {/* Interactive Tap-to-Flip Rule Demo Chip */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playTranspose();
+                        const nextIdx = (lobbyRuleIdx + 1) % LOBBY_RULES.length;
+                        setLobbyRuleIdx(nextIdx);
+                        setLobbyKiboLine(`Rumus kilat: ${LOBBY_RULES[nextIdx].hint}`);
+                      }}
+                      className="absolute bottom-3 left-3 right-3 rounded-2xl bg-[#0D354C]/90 border-2 border-[#FBBF24]/80 px-3 py-2 text-left flex items-center justify-between gap-2 shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#FDE047]">
+                          Ketuk Contoh Pindah Ruas
+                        </div>
+                        <div className="font-mono text-xs sm:text-sm font-extrabold text-white truncate tabular-nums">
+                          {activeRule.eq}
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-xl bg-[#FEF08A] text-[#291802] font-mono font-extrabold text-xs px-2.5 py-1.5">
+                        {activeRule.badge}
+                      </span>
+                    </button>
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Quick Chapter Launch Grid */}
               <div className="rounded-3xl game-panel p-4">
@@ -708,7 +925,7 @@ export default function App() {
                           setSelectedChapterId(ch.id);
                           setScreen('MAP');
                         }}
-                        className={`min-h-[60px] rounded-2xl p-2 flex flex-col items-center justify-center border-2 transition-transform active:scale-95 cursor-pointer ${
+                        className={`min-h-[60px] rounded-2xl p-2 flex flex-col items-center justify-center border-2 transition-transform duration-200 hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer ${
                           bossBeat
                             ? 'bg-[#FEF3C7] border-[#F59E0B] text-[#92400E]'
                             : 'bg-[#EBF8FF] border-[#BAE6FD] text-[#0D354C] hover:border-[#0284C7]'
@@ -723,19 +940,29 @@ export default function App() {
                   })}
                 </div>
               </div>
+
+              {/* Daily Missions Compact Panel */}
+              <DailyMissionsCard
+                progress={progress}
+                onClaimMission={handleClaimDailyMission}
+                onWatchSpecialEnding={() => setSpecialEndingOpen(true)}
+                compact
+              />
             </section>
           </div>
         )}
 
         {/* SCREEN 2: TREASURE MAP PARCHMENT WITH SWIMMING FISH, RED DASHED PATH & KIBO */}
         {screen === 'MAP' && (
-          <TreasureMap
-            chapters={CHAPTERS}
-            activeChapter={activeChapter}
-            progress={progress}
-            onSelectChapter={setSelectedChapterId}
-            onSelectLevel={setActiveLevel}
-          />
+          <Suspense fallback={null}>
+            <TreasureMap
+              chapters={CHAPTERS}
+              activeChapter={activeChapter}
+              progress={progress}
+              onSelectChapter={setSelectedChapterId}
+              onSelectLevel={setActiveLevel}
+            />
+          </Suspense>
         )}
 
         {/* SCREEN 3: PURE-RANDOM PROCEDURAL ARCADE PRACTICE MODE */}
@@ -816,7 +1043,11 @@ export default function App() {
         )}
 
         {/* SCREEN 4: KIBO RULEBOOK / CODEX */}
-        {screen === 'CODEX' && <PocketGuide onStartChapter={handleStartChapter} />}
+        {screen === 'CODEX' && (
+          <Suspense fallback={null}>
+            <PocketGuide onStartChapter={handleStartChapter} />
+          </Suspense>
+        )}
 
         {/* SCREEN 5: DEDICATED ACHIEVEMENT BADGES MENU */}
         {screen === 'BADGES' && (
@@ -838,7 +1069,15 @@ export default function App() {
               </div>
             </div>
 
-            <ProfileBadgesCard progress={progress} />
+            <DailyMissionsCard
+              progress={progress}
+              onClaimMission={handleClaimDailyMission}
+              onWatchSpecialEnding={() => setSpecialEndingOpen(true)}
+            />
+
+            <Suspense fallback={null}>
+              <ProfileBadgesCard progress={progress} />
+            </Suspense>
           </div>
         )}
       </main>
@@ -846,7 +1085,7 @@ export default function App() {
       {/* MOBILE NATIVE ANDROID BOTTOM NAVIGATION BAR */}
       <nav
         aria-label="Navigasi game"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0D4A6B]/95 backdrop-blur-md border-t-2 border-[#7DD3FC]/55 pb-safe"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0D4A6B]/98 border-t-2 border-[#7DD3FC]/55 pb-safe"
       >
         <div className="grid grid-cols-5 h-15">
           {(

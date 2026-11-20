@@ -63,7 +63,16 @@ const SIZE_CLASSES: Record<'sm' | 'md' | 'lg' | 'xl', string> = {
   xl: 'w-28 h-28 sm:w-32 sm:h-32 rounded-3xl',
 };
 
-export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
+const QUIRK_BADGES: Record<BossVariant, string[]> = {
+  squid: ['Bloop~', 'Hii!', '*kedip*'],
+  pufferfish: ['Puff!', 'Hmph!', 'Gelembung~'],
+  crab: ['Klak-klak!', 'Cling!', 'Emas!'],
+  cannon_turtle: ['Hoam~', 'Zzz...', 'Boom?'],
+  orca: ['Fufufu~', '*kilau*', 'Hah!'],
+  cthulhu: ['GRRR...', 'KOSMIK!', '*tatap*'],
+};
+
+export const AnimatedBoss: React.FC<AnimatedBossProps> = React.memo(({
   variant,
   chapterId,
   state,
@@ -78,7 +87,10 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
   const uid = useId().replace(/:/g, '');
   const [tapCount, setTapCount] = useState(0);
   const [isReacting, setIsReacting] = useState(false);
+  const [quirkLabel, setQuirkLabel] = useState<string | null>(null);
+  const [quirkKey, setQuirkKey] = useState(0);
   const reactTimerRef = useRef<number | null>(null);
+  const quirkTimerRef = useRef<number | null>(null);
   const resolvedVariant = variant ?? getBossVariantForChapter(chapterId);
   const palette = CHAPTER_ACCENT[chapterId] || CHAPTER_ACCENT[0];
   const comicMeta = TAP_COMIC_WORDS[resolvedVariant];
@@ -86,11 +98,50 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
   useEffect(() => {
     return () => {
       if (reactTimerRef.current) window.clearTimeout(reactTimerRef.current);
+      if (quirkTimerRef.current) window.clearTimeout(quirkTimerRef.current);
     };
   }, []);
 
-  // Kid-friendly subtle bobbing using existing animation keys
-  const beatClass = state === 'defeated' ? '' : 'anime-kibo-breathe';
+  // Periodic spontaneous boss quirks/expressions so bosses feel alive during battle
+  useEffect(() => {
+    if (!interactive || state === 'defeated' || state === 'hit') {
+      setQuirkLabel(null);
+      return;
+    }
+    let cancelled = false;
+    let clearId: number | null = null;
+
+    const scheduleQuirk = () => {
+      const delay = 4500 + Math.floor(Math.random() * 2600);
+      quirkTimerRef.current = window.setTimeout(() => {
+        if (cancelled) return;
+        const pool = QUIRK_BADGES[resolvedVariant];
+        const nextWord = pool[Math.floor(Math.random() * pool.length)];
+        setQuirkLabel(nextWord);
+        setQuirkKey((k) => k + 1);
+        clearId = window.setTimeout(() => {
+          if (!cancelled) setQuirkLabel(null);
+        }, 1250);
+        scheduleQuirk();
+      }, delay);
+    };
+
+    scheduleQuirk();
+    return () => {
+      cancelled = true;
+      if (quirkTimerRef.current) window.clearTimeout(quirkTimerRef.current);
+      if (clearId) window.clearTimeout(clearId);
+    };
+  }, [interactive, state, resolvedVariant]);
+
+  const beatClass =
+    state === 'defeated'
+      ? ''
+      : state === 'enraged'
+        ? 'anime-boss-enraged'
+        : phonkPlaying
+          ? 'anime-boss-beat'
+          : 'anime-kibo-breathe';
   const outerBobClass =
     state === 'defeated' || state === 'hit' || isReacting ? '' : 'animate-kibo-waddle';
 
@@ -100,11 +151,12 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
       : palette.glow;
 
   const isMocking = state === 'mocking';
-  const activeExpr = isReacting || isMocking;
+  const activeExpr = isReacting || isMocking || quirkLabel !== null;
 
   const handleTap = () => {
     if (!interactive || state === 'defeated') return;
     sound.playBossTaunt();
+    setQuirkLabel(null);
     setTapCount((c) => c + 1);
     setIsReacting(true);
     if (reactTimerRef.current) window.clearTimeout(reactTimerRef.current);
@@ -1111,13 +1163,16 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
     <motion.button
       type="button"
       onClick={handleTap}
+      whileHover={state !== 'defeated' ? { scale: 1.06, rotate: -2 } : undefined}
       whileTap={{ scale: 0.9 }}
       animate={
         state === 'hit'
           ? { x: [0, -7, 7, -4, 4, 0], rotate: [0, -6, 6, -3, 0], scale: [1, 0.92, 1.05, 1] }
-          : { x: 0, rotate: 0, scale: 1 }
+          : quirkLabel
+            ? { y: [0, -4, 0], rotate: [0, -2.5, 2.5, 0], scale: [1, 1.03, 1] }
+            : { x: 0, y: 0, rotate: 0, scale: 1 }
       }
-      transition={{ duration: 0.38 }}
+      transition={{ duration: 0.42 }}
       aria-label="Ketuk Bos Penjaga"
       title="Ketuk Bos!"
       className={`${frameClass} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FBBF24]`}
@@ -1127,15 +1182,26 @@ export const AnimatedBoss: React.FC<AnimatedBossProps> = ({
         {renderBossSvg()}
       </div>
 
-      {/* Comic Reaction Bubble on Every Tap */}
-      {isReacting && (
+      {/* Comic Reaction Bubble on Every Tap or Spontaneous Quirk */}
+      {isReacting ? (
         <span
           key={`comic-${tapCount}`}
           className={`pointer-events-none absolute -top-3 -right-2 z-30 rounded-xl px-2 py-0.5 font-display font-extrabold text-[11px] shadow-lg border border-white/80 whitespace-nowrap animate-boss-comic ${comicMeta.bg}`}
         >
           {comicMeta.tap}
         </span>
+      ) : (
+        quirkLabel && (
+          <span
+            key={`quirk-${quirkKey}`}
+            className={`pointer-events-none absolute -top-3 -right-2 z-30 rounded-xl px-2 py-0.5 font-display font-extrabold text-[10px] shadow-md border border-white/80 whitespace-nowrap animate-boss-comic ${comicMeta.bg}`}
+          >
+            {quirkLabel}
+          </span>
+        )
       )}
     </motion.button>
   );
-};
+});
+
+AnimatedBoss.displayName = 'AnimatedBoss';

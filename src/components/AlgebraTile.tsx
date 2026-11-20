@@ -102,6 +102,40 @@ export const TreasureChestIcon: React.FC<{ className?: string }> = ({ className 
   </svg>
 );
 
+export const OpenedChestIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 28 28" fill="none" className={className} aria-hidden="true">
+    {/* Raised Open Lid tilted back */}
+    <path
+      d="M4.5 11.5 L6.2 4.5 C6.6 3.3 7.8 2.8 9 2.8 H19 C20.2 2.8 21.4 3.3 21.8 4.5 L23.5 11.5 Z"
+      fill="currentColor"
+      fillOpacity="0.2"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+    {/* Open dark hollow interior */}
+    <path
+      d="M4.5 11.5 H23.5 L22.2 14.2 H5.8 Z"
+      fill="currentColor"
+      fillOpacity="0.45"
+    />
+    {/* Chest base */}
+    <rect
+      x="3.5"
+      y="13.2"
+      width="21"
+      height="11.5"
+      rx="3"
+      fill="currentColor"
+      fillOpacity="0.24"
+      stroke="currentColor"
+      strokeWidth="2.1"
+    />
+    {/* Open latch */}
+    <rect x="12" y="12.5" width="4" height="4.2" rx="1" fill="currentColor" />
+  </svg>
+);
+
 export const PusakaHexIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
     <polygon
@@ -125,15 +159,15 @@ export const PusakaHexIcon: React.FC<{ className?: string }> = ({ className }) =
 export function renderFamilyGlyph(family: SymbolFamily, sign: 1 | -1, sizeClass = 'w-11 h-11 sm:w-12 sm:h-12') {
   if (family === 'sun') {
     return sign > 0 ? (
-      <SunCarving className={`${sizeClass} text-[#FEF3C7] drop-shadow-xs`} />
+      <SunCarving className={`${sizeClass} text-[#FEF3C7]`} />
     ) : (
-      <MoonCarving className={`${sizeClass} text-[#FEE2E2] drop-shadow-xs`} />
+      <MoonCarving className={`${sizeClass} text-[#FEE2E2]`} />
     );
   }
   if (family === 'shell') {
     return (
       <ShellCarving
-        className={`${sizeClass} drop-shadow-xs ${
+        className={`${sizeClass} ${
           sign > 0 ? 'text-[#CCFBF1]' : 'text-[#FEE2E2] rotate-180'
         }`}
       />
@@ -141,7 +175,7 @@ export function renderFamilyGlyph(family: SymbolFamily, sign: 1 | -1, sizeClass 
   }
   return (
     <LeafCarving
-      className={`${sizeClass} drop-shadow-xs ${
+      className={`${sizeClass} ${
         sign > 0 ? 'text-[#D1FAE5]' : 'text-[#FEE2E2] -scale-x-100'
       }`}
     />
@@ -156,14 +190,13 @@ export function renderFamilyGlyph(family: SymbolFamily, sign: 1 | -1, sizeClass 
 export const TileCardFace: React.FC<{
   term: Term;
   visualStyle: VisualStyle;
+  side?: Side;
   glowGold?: boolean;
   className?: string;
-}> = ({ term, visualStyle, glowGold = false, className = '' }) => {
+}> = ({ term, visualStyle, side, glowGold = false, className = '' }) => {
   const showStones = visualStyle === 'stones';
   const pureSymbols = visualStyle === 'pure_symbols';
-  const glowClass = glowGold
-    ? 'ring-2 ring-[#FEF08A] shadow-[0_12px_30px_rgba(251,191,36,0.6)]'
-    : 'shadow-2xl';
+  const glowClass = glowGold ? 'ring-2 ring-[#FEF08A]' : 'shadow-md';
 
   // 0. PURE SYMBOL CARD (BAB 0)
   if (term.kind === 'sym') {
@@ -238,13 +271,27 @@ export const TileCardFace: React.FC<{
     const hasCoeff = absCoeff > 1;
     const hasDenom = term.denom > 1;
 
-    if (pureSymbols && term.coeff === 1 && term.denom === 1) {
+    if (pureSymbols && Math.abs(term.coeff) === 1 && term.denom === 1) {
+      const isOpened = side ? side === 'right' : term.coeff < 0;
       return (
         <div
-          className={`relative select-none rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var border-2 border-[#FEF3C7] ${glowClass} ${className}`}
+          className={`relative select-none rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center text-white ${
+            isNeg
+              ? 'bg-[#B91C1C] tile-shadow-neg border-2 border-dashed border-white/75'
+              : 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-2 border-[#FEF3C7]'
+          } ${glowClass} ${className}`}
         >
           <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/35" />
-          <TreasureChestIcon className="w-11 h-11 sm:w-12 sm:h-12 text-[#FFFBEB] drop-shadow-xs" />
+          {isNeg && (
+            <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+              −
+            </span>
+          )}
+          {isOpened ? (
+            <OpenedChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+          ) : (
+            <TreasureChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+          )}
         </div>
       );
     }
@@ -331,7 +378,7 @@ export const OperatorCardFace: React.FC<{
         isGold
           ? 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-[#FEF3C7]'
           : 'bg-[#0F766E] tile-shadow-pos border-[#5EEAD4]'
-      } ${glowGold ? 'ring-2 ring-[#FEF08A] shadow-[0_12px_30px_rgba(251,191,36,0.6)]' : 'shadow-2xl'}`}
+      } ${glowGold ? 'ring-2 ring-[#FEF08A]' : 'shadow-md'}`}
     >
       <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-white/20" />
       <div className="font-display font-extrabold text-2xl sm:text-3xl leading-none tabular-nums whitespace-nowrap">
@@ -352,8 +399,9 @@ export const OperatorCardFace: React.FC<{
 export const InlineTermChip: React.FC<{
   term: Term;
   pureSymbols?: boolean;
+  side?: Side;
   size?: 'xs' | 'sm' | 'md';
-}> = ({ term, pureSymbols = true, size = 'sm' }) => {
+}> = ({ term, pureSymbols = true, side, size = 'sm' }) => {
   const boxCls =
     size === 'xs'
       ? 'w-6 h-6 rounded-md'
@@ -393,14 +441,29 @@ export const InlineTermChip: React.FC<{
     );
   }
 
-  if (term.kind === 'var' && pureSymbols && term.coeff === 1 && term.denom === 1) {
+  if (term.kind === 'var' && pureSymbols && Math.abs(term.coeff) === 1 && term.denom === 1) {
+    const isOpened = side ? side === 'right' : term.coeff < 0;
+    const isNeg = term.coeff < 0;
     return (
       <span
-        title="Peti Pusaka"
-        aria-label="Peti Pusaka"
-        className={`inline-flex items-center justify-center shrink-0 align-middle bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FEF3C7] text-[#FFFBEB] shadow-xs ${boxCls}`}
+        title={isOpened ? 'Peti Terbuka' : 'Peti Pusaka'}
+        aria-label={isOpened ? 'Peti Terbuka' : 'Peti Pusaka'}
+        className={`relative inline-flex items-center justify-center shrink-0 align-middle shadow-xs ${boxCls} ${
+          isNeg
+            ? 'bg-[#B91C1C] border border-dashed border-white/75 text-[#FEE2E2]'
+            : 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FEF3C7] text-[#FFFBEB]'
+        }`}
       >
-        <TreasureChestIcon className={iconCls} />
+        {isOpened ? (
+          <OpenedChestIcon className={iconCls} />
+        ) : (
+          <TreasureChestIcon className={iconCls} />
+        )}
+        {isNeg && (
+          <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-[#7F1D1D] border border-white/80 text-[8px] font-extrabold leading-none flex items-center justify-center text-white">
+            −
+          </span>
+        )}
       </span>
     );
   }
@@ -452,7 +515,7 @@ export const InlineEquationVisual: React.FC<{
         ? 'w-8 h-8 text-lg rounded-xl'
         : 'w-6 h-6 text-sm rounded-lg';
 
-  const renderSide = (terms: Term[]) => {
+  const renderSide = (terms: Term[], side: Side) => {
     if (terms.length === 0) {
       return (
         <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg border border-dashed border-[#7DD3FC] text-[11px] font-bold text-[#0369A1]">
@@ -460,23 +523,25 @@ export const InlineEquationVisual: React.FC<{
         </span>
       );
     }
-    return terms.map((t) => <InlineTermChip key={t.id} term={t} pureSymbols size={size} />);
+    return terms.map((t) => (
+      <InlineTermChip key={t.id} term={t} pureSymbols side={side} size={size} />
+    ));
   };
 
   return (
     <span className="inline-flex flex-wrap items-center justify-center gap-1.5 align-middle">
-      <span className="inline-flex flex-wrap items-center gap-1">{renderSide(state.left)}</span>
+      <span className="inline-flex flex-wrap items-center gap-1">{renderSide(state.left, 'left')}</span>
       <span
         className={`inline-flex items-center justify-center font-display font-extrabold bg-gradient-to-b from-[#FDE047] to-[#F59E0B] text-[#291802] border border-[#FEF9C3] shadow-xs shrink-0 ${eqSize}`}
       >
         =
       </span>
-      <span className="inline-flex flex-wrap items-center gap-1">{renderSide(state.right)}</span>
+      <span className="inline-flex flex-wrap items-center gap-1">{renderSide(state.right, 'right')}</span>
     </span>
   );
 };
 
-export const AlgebraTile: React.FC<AlgebraTileProps> = ({
+export const AlgebraTile: React.FC<AlgebraTileProps> = React.memo(({
   term,
   side,
   isSoloOnSide,
@@ -492,7 +557,7 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = ({
   const pureSymbols = visualStyle === 'pure_symbols';
 
   const selectionClass = isSelected
-    ? 'ring-3 ring-[#F59E0B] ring-offset-2 ring-offset-[#EBF9FF] -translate-y-1'
+    ? 'ring-3 ring-[#F59E0B] ring-offset-2 ring-offset-[#EBF9FF] -translate-y-1.5 scale-[1.04] rotate-[-1.5deg]'
     : isCombineTarget
       ? 'ring-3 ring-[#14B8A6] ring-offset-2 ring-offset-[#EBF9FF] scale-[1.07]'
       : isHinted
@@ -610,15 +675,16 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = ({
     const canDragCoeff = isSoloOnSide && hasCoeff;
     const canDragDenom = isSoloOnSide && hasDenom;
 
-    if (pureSymbols && term.coeff === 1 && term.denom === 1) {
+    if (pureSymbols && Math.abs(term.coeff) === 1 && term.denom === 1) {
+      const isOpened = side === 'right';
       return (
         <div
           data-term-id={term.id}
           data-side={side}
           role="button"
           tabIndex={0}
-          title="Peti Pusaka"
-          aria-label={`Peti Pusaka di ruas ${side === 'left' ? 'kiri' : 'kanan'}`}
+          title={isOpened ? 'Peti Terbuka (Ruas Kanan)' : 'Peti Pusaka (Ruas Kiri)'}
+          aria-label={`${isOpened ? 'Peti Terbuka' : 'Peti Pusaka'} di ruas ${side === 'left' ? 'kiri' : 'kanan'}`}
           onPointerDown={(e) => onPointerStart(e, term, side, 'term')}
           onClick={(e) => {
             e.stopPropagation();
@@ -630,10 +696,23 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = ({
               onTap(term, side);
             }
           }}
-          className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in bg-gradient-to-b from-[#F59E0B] to-[#D97706] text-white tile-shadow-var border-2 border-[#FEF3C7] ${selectionClass} ${opacityClass}`}
+          className={`relative select-none touch-none cursor-grab active:cursor-grabbing rounded-2xl w-[86px] h-[86px] sm:w-[94px] sm:h-[94px] p-2.5 flex flex-col items-center justify-center transition-transform duration-150 animate-pop-in text-white ${
+            isNeg
+              ? 'bg-[#B91C1C] tile-shadow-neg border-2 border-dashed border-white/70'
+              : 'bg-gradient-to-b from-[#F59E0B] to-[#D97706] tile-shadow-var border-2 border-[#FEF3C7]'
+          } ${selectionClass} ${opacityClass}`}
         >
           <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-[#FEF3C7]/35" />
-          <TreasureChestIcon className="w-11 h-11 sm:w-12 sm:h-12 text-[#FFFBEB] drop-shadow-xs" />
+          {isNeg && (
+            <span className="absolute top-1.5 right-2 font-display font-extrabold text-sm leading-none text-[#FECACA]">
+              −
+            </span>
+          )}
+          {isOpened ? (
+            <OpenedChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+          ) : (
+            <TreasureChestIcon className={`w-11 h-11 sm:w-12 sm:h-12 ${isNeg ? 'text-[#FEE2E2]' : 'text-[#FFFBEB]'}`} />
+          )}
         </div>
       );
     }
@@ -779,4 +858,6 @@ export const AlgebraTile: React.FC<AlgebraTileProps> = ({
       </div>
     </div>
   );
-};
+});
+
+AlgebraTile.displayName = 'AlgebraTile';

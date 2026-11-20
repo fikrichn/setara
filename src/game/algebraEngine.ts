@@ -24,7 +24,12 @@ export function isPureSymbolState(state: EquationState): boolean {
   return all.some((t) => t.kind === 'sym');
 }
 
-export function formatSingleTerm(term: Term, isFirst: boolean, pureSymbols = false): string {
+export function formatSingleTerm(
+  term: Term,
+  isFirst: boolean,
+  pureSymbols = false,
+  side?: Side
+): string {
   if (term.kind === 'sym') {
     const info = SYMBOL_NAMES[term.family];
     const label = term.sign > 0 ? info.pos : info.neg;
@@ -39,8 +44,11 @@ export function formatSingleTerm(term: Term, isFirst: boolean, pureSymbols = fal
   }
 
   if (term.kind === 'var') {
-    if (pureSymbols && term.coeff === 1 && term.denom === 1) {
-      return isFirst ? 'Peti' : '+ Peti';
+    if (pureSymbols && Math.abs(term.coeff) === 1 && term.denom === 1) {
+      const isOpened = side ? side === 'right' : term.coeff < 0;
+      const chestLabel = isOpened ? 'Peti Terbuka' : 'Peti';
+      if (isFirst) return term.coeff < 0 && !isOpened ? `−${chestLabel}` : chestLabel;
+      return term.coeff < 0 ? `− ${chestLabel}` : `+ ${chestLabel}`;
     }
     const absCoeff = Math.abs(term.coeff);
     const coeffStr = absCoeff === 1 ? '' : `${absCoeff}`;
@@ -68,14 +76,14 @@ export function formatSingleTerm(term: Term, isFirst: boolean, pureSymbols = fal
   return term.factor < 0 ? `− ${core}` : `+ ${core}`;
 }
 
-export function formatSide(terms: Term[], pureSymbols = false): string {
+export function formatSide(terms: Term[], pureSymbols = false, side?: Side): string {
   if (terms.length === 0) return pureSymbols ? 'Kosong' : '0';
-  return terms.map((t, idx) => formatSingleTerm(t, idx === 0, pureSymbols)).join(' ');
+  return terms.map((t, idx) => formatSingleTerm(t, idx === 0, pureSymbols, side)).join(' ');
 }
 
 export function formatEquation(state: EquationState, forcePureSymbols?: boolean): string {
   const pure = forcePureSymbols ?? isPureSymbolState(state);
-  return `${formatSide(state.left, pure)} = ${formatSide(state.right, pure)}`;
+  return `${formatSide(state.left, pure, 'left')} = ${formatSide(state.right, pure, 'right')}`;
 }
 
 export function formatTermShort(term: Term, pureSymbols = false): string {
@@ -87,7 +95,9 @@ export function formatTermShort(term: Term, pureSymbols = false): string {
     return term.value >= 0 ? `+${term.value}` : `−${Math.abs(term.value)}`;
   }
   if (term.kind === 'var') {
-    if (pureSymbols && term.coeff === 1 && term.denom === 1) return 'Peti Pusaka';
+    if (pureSymbols && Math.abs(term.coeff) === 1 && term.denom === 1) {
+      return term.coeff === 1 ? 'Peti Pusaka' : 'Peti Terbuka';
+    }
     const absC = Math.abs(term.coeff);
     const cStr = absC === 1 ? '' : `${absC}`;
     const sign = term.coeff >= 0 ? '+' : '−';
@@ -162,18 +172,33 @@ export function transposeTerm(state: EquationState, fromSide: Side, termId: stri
     };
   }
 
+  const pure = isPureSymbolState(state);
   const flippedCoeff = -term.coeff;
-  const oldStr = formatTermShort(term);
+  const oldStr = formatTermShort(term, pure);
   const newTerm: Term = {
     id: nextTermId('v'),
     kind: 'var',
     coeff: flippedCoeff,
     denom: term.denom,
   };
-  const newStr = formatTermShort(newTerm);
+  const newStr = formatTermShort(newTerm, pure);
   const sideWord = targetSide === 'right' ? 'kanan' : 'kiri';
 
   next[targetSide].push(newTerm);
+
+  if (pure && Math.abs(term.coeff) === 1 && term.denom === 1) {
+    const targetOpened = targetSide === 'right';
+    const oldLabel = fromSide === 'right' ? 'Peti Terbuka' : 'Peti Pusaka';
+    const newLabel = targetOpened ? 'Peti Terbuka' : 'Peti Pusaka';
+    return {
+      ok: true,
+      nextState: next,
+      ruleLabel: `${oldLabel} → ${newLabel}`,
+      explanation: targetOpened
+        ? `Peti menyeberangi jembatan = ke ruas kanan sehingga terbuka menjadi ${newLabel}!`
+        : `Peti menyeberangi jembatan = ke ruas kiri sehingga tertutup kembali menjadi ${newLabel}!`,
+    };
+  }
 
   return {
     ok: true,
@@ -559,7 +584,7 @@ export function checkSolved(
       return {
         solved: true,
         value: null,
-        displayResult: `Peti = ${formatSide(state.right, true)}`,
+        displayResult: `Peti = ${formatSide(state.right, true, 'right')}`,
         xSide: 'left',
       };
     }
@@ -567,7 +592,7 @@ export function checkSolved(
       return {
         solved: true,
         value: null,
-        displayResult: `Peti = ${formatSide(state.left, true)}`,
+        displayResult: `Peti = ${formatSide(state.left, true, 'left')}`,
         xSide: 'right',
       };
     }
@@ -758,7 +783,9 @@ export function getSmartHint(state: EquationState, pureSymbolsMode = false): Sma
     }
     if (soloX.coeff === -1) {
       return {
-        message: `x masih bertanda negatif (−x). Tekan tombol "Balik Tanda (±)" di bawah agar menjadi +x.`,
+        message: pure
+          ? `Peti masih terbuka (berlawanan). Tekan tombol "Balik Tanda (±)" di bawah agar berubah menjadi Peti Pusaka!`
+          : `x masih bertanda negatif (−x). Tekan tombol "Balik Tanda (±)" di bawah agar menjadi +x.`,
         highlightIds: [soloX.id],
         actionType: 'flip',
       };

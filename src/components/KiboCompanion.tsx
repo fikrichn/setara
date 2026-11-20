@@ -12,6 +12,7 @@ import {
   Star,
   Zap,
 } from 'lucide-react';
+import { getContextualKiboPool } from '../game/kiboDialogues';
 import { sound } from '../game/sound';
 import { BossConfig, TutorialStep } from '../game/types';
 import {
@@ -42,39 +43,6 @@ const DEFAULT_REACTION_POOL: ActiveKiboReaction[] = [
   'surfer_wave',
   'treasure_sparkle',
 ];
-
-const CHAPTER_QUIPS: Record<number, string[]> = {
-  0: [
-    'Blub-blub! Di Bab 0 kita main simbol pantai tanpa angka, seru kan!',
-    'Ayo buat Peti Pusaka sendirian di satu ruas timbangan!',
-    'Pasangan simbol asli dan lawan kalau digabung langsung lenyap!',
-  ],
-  1: [
-    'Siap kapten! Di Bab 1 ingat ya: + pindah ruas jadi −, − jadi +!',
-    'Wiuuu! Ombak Bab 1 makin asyik buat pindah ruas angka!',
-    'Kalau angka berlawanan bertemu di ruas yang sama, langsung jadi 0!',
-  ],
-  2: [
-    'Kilau emas Bab 2! Gabungkan angka sejenis biar papan makin rapi!',
-    'Hmm... angka negatif dan positif kalau pas bakal saling hapus!',
-    'Hiu-hiu! Harta karun aljabar Bab 2 menunggumu!',
-  ],
-  3: [
-    'Awas Bab 3! Pengali di depan x kalau pindah ruas berubah jadi bagi!',
-    'Pecahan pembagi / kalau menyeberangi = langsung berubah jadi kali!',
-    'Tenang dan teliti ya, Kibo selalu joget menyemangatimu!',
-  ],
-  4: [
-    'Keren! Di Bab 4 kumpulkan semua x di satu ruas dan angka di ruas lain!',
-    'Lawan ombak Bab 4 dengan tenang — satu kartu tiap langkah!',
-    'Siap hormat kapten! Variabel di dua sisi pasti bisa kamu rapikan!',
-  ],
-  5: [
-    'Wuuush! Melayang di dimensi kosmik Bab 5! Buka kurung atau pindah faktor dulu!',
-    'Bab terakhir penuh tantangan seru — Kibo percaya kamu bisa!',
-    'Tanda kurung di Bab 5 bukan penghalang buat jagoan pindah ruas!',
-  ],
-};
 
 const DEFAULT_AFK_MS = 60_000;
 
@@ -137,9 +105,7 @@ export const KiboAvatar: React.FC<{
   const resolvedCustomQuips =
     customQuips && customQuips.length > 0
       ? customQuips
-      : typeof chapterId === 'number' && CHAPTER_QUIPS[chapterId]
-        ? CHAPTER_QUIPS[chapterId]
-        : undefined;
+      : getContextualKiboPool(typeof chapterId === 'number' ? chapterId : 0);
 
   const triggerRandomReaction = useCallback(
     (durationMs = 2600) => {
@@ -453,7 +419,7 @@ function formatCountdown(sec: number): string {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
-export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
+export const BossArenaBanner: React.FC<BossArenaBannerProps> = React.memo(({
   boss,
   chapterId,
   phaseIndex,
@@ -716,7 +682,16 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
           </div>
         </div>
 
-        <p className="mt-1 text-xs sm:text-sm text-[#F0F9FF] leading-snug">“{dialogue}”</p>
+        <div
+          key={dialogue}
+          className="relative mt-2 ml-1.5 rounded-2xl bg-white/14 border border-white/30 px-3 py-1.5 text-xs sm:text-sm text-[#F0F9FF] leading-snug shadow-sm speech-bubble-pop"
+        >
+          <span
+            aria-hidden="true"
+            className="absolute -left-1.5 top-3 w-3 h-3 rotate-45 bg-[#334155]/85 border-l border-b border-white/30"
+          />
+          <p className="relative z-10 font-medium">“{dialogue}”</p>
+        </div>
 
         {/* Boss Countdown Progress Bar */}
         <div className="mt-2 h-1.5 w-full rounded-full bg-black/30 overflow-hidden">
@@ -738,7 +713,9 @@ export const BossArenaBanner: React.FC<BossArenaBannerProps> = ({
       </div>
     </div>
   );
-};
+});
+
+BossArenaBanner.displayName = 'BossArenaBanner';
 
 // =========================================================================
 // BOSS VICTORY CELEBRATION: INTERACTIVE ANIME KIBO HIGH-FIVE & CHEERING!
@@ -793,7 +770,7 @@ export const KiboBossCelebration: React.FC<KiboBossCelebrationProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/70 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/82 p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="boss-victory-title"
@@ -1000,7 +977,7 @@ export const BossDefeatModal: React.FC<BossDefeatModalProps> = ({
 }) => {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/75 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/84 p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="boss-defeat-title"
@@ -1088,7 +1065,7 @@ export const KiboAfkDefeatModal: React.FC<KiboAfkDefeatModalProps> = ({
 }) => {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/75 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/84 p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="kibo-afk-defeat-title"
@@ -1143,6 +1120,168 @@ export const KiboAfkDefeatModal: React.FC<KiboAfkDefeatModalProps> = ({
             <span>Coba Lagi!</span>
           </button>
         </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// =========================================================================
+// 7-DAY STREAK SPECIAL ENDING MODAL WITH KIBO!
+// =========================================================================
+
+interface KiboSpecialEndingModalProps {
+  open: boolean;
+  streakDays: number;
+  bonusPoints: number;
+  onClose: () => void;
+}
+
+export const KiboSpecialEndingModal: React.FC<KiboSpecialEndingModalProps> = ({
+  open,
+  streakDays,
+  bonusPoints,
+  onClose,
+}) => {
+  const [highFived, setHighFived] = useState(false);
+  const [burstKey, setBurstKey] = useState(0);
+
+  if (!open) return null;
+
+  const handleHighFive = () => {
+    sound.playHighFive();
+    setHighFived(true);
+    setBurstKey((k) => k + 1);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/86 p-4 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="kibo-special-ending-title"
+    >
+      {/* Celebratory Confetti Curtain */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
+        {CONFETTI_PIECES.map((p, idx) => (
+          <span
+            key={idx}
+            style={
+              {
+                left: p.left,
+                top: '-8px',
+                backgroundColor: p.color,
+                '--drift': p.drift,
+                '--dur': p.dur,
+                '--delay': p.delay,
+              } as React.CSSProperties
+            }
+            className="absolute w-3 h-3 rounded-xs animate-confetti"
+          />
+        ))}
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8, y: 32 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+        className="relative w-full max-w-lg rounded-3xl game-panel border-3 border-[#A855F7] p-6 sm:p-7 text-center overflow-hidden shadow-2xl"
+      >
+        <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F3E8FF] border border-[#C084FC] px-3 py-1 text-xs font-extrabold tracking-wide text-[#6B21A8]">
+          <Crown className="w-4 h-4 text-[#9333EA]" aria-hidden="true" />
+          <span>ENDING SPESIAL 7 HARI BERTURUT-TURUT!</span>
+        </div>
+
+        <h2
+          id="kibo-special-ending-title"
+          className="mt-2 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]"
+        >
+          Sahabat Abadi Kibo!
+        </h2>
+
+        <div className="relative mt-4 flex flex-col items-center">
+          {burstKey > 0 && (
+            <div
+              key={burstKey}
+              className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-44 h-44 rounded-full border-4 border-[#A855F7] animate-shockwave"
+            />
+          )}
+
+          <motion.button
+            type="button"
+            onClick={handleHighFive}
+            animate={
+              highFived
+                ? { y: [0, -18, 0, -10, 0], rotate: [0, -4, 4, 0], scale: [1, 1.08, 1] }
+                : { y: [0, -6, 0] }
+            }
+            transition={
+              highFived
+                ? { duration: 0.58, ease: 'easeOut' }
+                : { duration: 1.6, repeat: Infinity, ease: 'easeInOut' }
+            }
+            aria-label="Peluk dan Tos Sahabat Abadi bersama Kibo"
+            className="relative rounded-3xl cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#A855F7]"
+          >
+            <AnimatedKibo
+              size="xl"
+              crown
+              highFiveRaised
+              mood={highFived ? 'excited' : 'happy'}
+              reaction={highFived ? 'happy_dance' : 'treasure_sparkle'}
+              interactive={false}
+              className="border-3 border-[#F59E0B] shadow-xl"
+            />
+          </motion.button>
+
+          <button
+            type="button"
+            onClick={handleHighFive}
+            className={`mt-3.5 inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-2 rounded-2xl text-sm font-extrabold whitespace-nowrap cursor-pointer ${
+              highFived ? 'game-btn-emerald' : 'game-btn-gold'
+            }`}
+          >
+            <Hand className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>{highFived ? 'Peluk & Tos Lagi!' : 'Peluk & Tos Sahabat!'}</span>
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-gradient-to-br from-[#F3E8FF] via-[#FFFDF5] to-[#E0F2FE] border-2 border-[#D8B4FE] px-4 py-3.5 text-left shadow-sm">
+          <div className="text-xs font-extrabold text-[#7E22CE] mb-1">
+            Pesan Hati Kibo si Hiu Gemoy:
+          </div>
+          <p className="text-xs sm:text-sm text-[#1E4E68] leading-relaxed font-medium">
+            “Selama 7 hari penuh tanpa putus, kamu selalu datang menemani Kibo berlatih pindah ruas
+            di Pantai Setara! Ombak pantai, bintang laut, dan seluruh pulau kini bersinar lebih
+            terang berkat ketekunanmu. Kamu bukan cuma jago aljabar — kamu sahabat terbaik Kibo
+            selamanya!”
+          </p>
+        </div>
+
+        <div className="mt-3.5 flex items-center justify-center gap-3 text-xs font-extrabold tabular-nums">
+          <span className="inline-flex items-center gap-1 rounded-xl bg-[#FEF3C7] border border-[#F59E0B]/60 text-[#92400E] px-3 py-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-[#D97706]" aria-hidden="true" />
+            Streak {Math.max(7, streakDays)} Hari
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-xl bg-[#E0F2FE] border border-[#7DD3FC] text-[#0369A1] px-3 py-1.5">
+            <Star className="w-3.5 h-3.5 fill-[#FBBF24] text-[#F59E0B]" aria-hidden="true" />
+            {bonusPoints} Poin Misi
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-xl bg-[#F3E8FF] border border-[#C084FC] text-[#6B21A8] px-3 py-1.5">
+            <Crown className="w-3.5 h-3.5 text-[#9333EA]" aria-hidden="true" />
+            Badge Terbuka!
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            sound.playPickup();
+            onClose();
+          }}
+          className="mt-5 game-btn-gold w-full min-h-[48px] rounded-xl text-sm font-extrabold cursor-pointer"
+        >
+          Lanjutkan Petualangan
+        </button>
       </motion.div>
     </div>
   );

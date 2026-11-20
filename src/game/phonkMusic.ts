@@ -1,45 +1,188 @@
 // Synthesized Drift Phonk Boss Music Engine (100% Web Audio API, zero external MP3s, offline APK-ready)
-// Features iconic 808 cowbell minor melody, distorted 808 sub-bass, punchy kick, crisp snare & rolling trap hi-hats.
+// Features iconic 808 cowbell minor melodies, distorted 808 sub-bass, punchy kick, crisp snare & rolling trap hi-hats.
+// Each Boss Chapter (0..5) has its own unique Phonk groove & scale, plus low-CPU shared saturation buses for Helio P35 smoothness.
+
+interface BossPhonkTrack {
+  bpmNormal: number;
+  bpmEnraged: number;
+  normalPattern: number[];
+  enragedPattern: number[];
+  bassPattern: number[];
+  kickSteps: number[];
+}
+
+const BOSS_PHONK_TRACKS: Record<number, BossPhonkTrack> = {
+  // Bab 0 Boss (Cumi Cilik) — Classic F# Minor Drift Phonk
+  0: {
+    bpmNormal: 132,
+    bpmEnraged: 144,
+    normalPattern: [
+      66, 0, 66, 69,  73, 0, 72, 0,
+      66, 0, 69, 66,  64, 0, 61, 0,
+      66, 0, 66, 69,  73, 76, 73, 0,
+      72, 0, 69, 66,  64, 66, 0, 0,
+    ],
+    enragedPattern: [
+      73, 0, 73, 76,  78, 0, 76, 73,
+      72, 0, 73, 69,  66, 0, 69, 72,
+      73, 73, 76, 0,  78, 0, 80, 78,
+      76, 73, 72, 69, 66, 0, 61, 0,
+    ],
+    bassPattern: [
+      42, 0, 0, 42,   0, 0, 42, 0,
+      38, 0, 0, 38,   0, 0, 37, 0,
+      42, 0, 0, 42,   0, 45, 42, 0,
+      40, 0, 0, 38,   37, 0, 0, 0,
+    ],
+    kickSteps: [0, 3, 6, 10],
+  },
+
+  // Bab 1 Boss (Kapten Buntal) — Swagger G Minor Pirate Drift Phonk
+  1: {
+    bpmNormal: 136,
+    bpmEnraged: 150,
+    normalPattern: [
+      67, 0, 70, 67,  74, 0, 73, 70,
+      67, 0, 67, 70,  65, 0, 62, 0,
+      67, 70, 74, 0,  75, 0, 74, 70,
+      67, 0, 65, 62,  65, 67, 0, 0,
+    ],
+    enragedPattern: [
+      74, 0, 74, 77,  79, 0, 77, 74,
+      73, 0, 74, 70,  67, 0, 70, 73,
+      74, 77, 79, 0,  82, 0, 79, 77,
+      74, 73, 70, 67, 70, 0, 62, 0,
+    ],
+    bassPattern: [
+      43, 0, 0, 43,   0, 43, 0, 46,
+      39, 0, 0, 39,   0, 0, 38, 0,
+      43, 0, 0, 43,   0, 46, 43, 0,
+      41, 0, 39, 0,   38, 0, 0, 0,
+    ],
+    kickSteps: [0, 3, 6, 9, 10],
+  },
+
+  // Bab 2 Boss (Kepiting Emas) — Heavy Metallic D Minor Phonk
+  2: {
+    bpmNormal: 138,
+    bpmEnraged: 148,
+    normalPattern: [
+      62, 62, 65, 0,  69, 0, 68, 65,
+      62, 0, 65, 69,  64, 0, 61, 0,
+      62, 62, 65, 69, 74, 0, 72, 69,
+      68, 0, 65, 64,  62, 0, 57, 0,
+    ],
+    enragedPattern: [
+      74, 74, 77, 0,  81, 0, 80, 77,
+      74, 0, 76, 77,  72, 0, 69, 72,
+      74, 74, 77, 81, 82, 0, 81, 77,
+      74, 72, 69, 68, 65, 0, 62, 0,
+    ],
+    bassPattern: [
+      38, 0, 0, 38,   0, 0, 38, 0,
+      41, 0, 0, 41,   0, 0, 37, 0,
+      38, 0, 41, 38,  0, 45, 38, 0,
+      40, 0, 38, 0,   37, 0, 0, 0,
+    ],
+    kickSteps: [0, 2, 6, 10, 14],
+  },
+
+  // Bab 3 Boss (Kura Meriam) — Heavy Cannon Bounce C Minor Phonk
+  3: {
+    bpmNormal: 126,
+    bpmEnraged: 138,
+    normalPattern: [
+      60, 0, 0, 63,   67, 0, 66, 0,
+      60, 0, 63, 60,  58, 0, 55, 0,
+      60, 0, 63, 67,  72, 0, 70, 67,
+      66, 0, 63, 60,  58, 60, 0, 0,
+    ],
+    enragedPattern: [
+      72, 0, 72, 75,  79, 0, 78, 75,
+      72, 0, 75, 72,  70, 0, 67, 70,
+      72, 72, 75, 0,  79, 0, 80, 79,
+      75, 72, 70, 67, 63, 0, 60, 0,
+    ],
+    bassPattern: [
+      36, 0, 0, 36,   0, 0, 36, 0,
+      39, 0, 0, 39,   0, 0, 35, 0,
+      36, 0, 0, 36,   0, 43, 39, 0,
+      34, 0, 0, 36,   35, 0, 0, 0,
+    ],
+    kickSteps: [0, 6, 8, 10],
+  },
+
+  // Bab 4 Boss (Kapten Orca) — Aggressive Predator E Minor Phonk
+  4: {
+    bpmNormal: 142,
+    bpmEnraged: 152,
+    normalPattern: [
+      64, 0, 67, 71,  72, 0, 71, 67,
+      64, 64, 67, 0,  62, 0, 59, 0,
+      64, 0, 67, 71,  76, 74, 71, 0,
+      72, 0, 71, 67,  64, 62, 59, 0,
+    ],
+    enragedPattern: [
+      76, 0, 76, 79,  83, 0, 82, 79,
+      76, 79, 83, 0,  74, 0, 71, 74,
+      76, 76, 79, 83, 84, 0, 83, 79,
+      76, 74, 72, 71, 67, 0, 64, 0,
+    ],
+    bassPattern: [
+      40, 0, 0, 40,   0, 0, 40, 0,
+      43, 0, 0, 43,   0, 0, 39, 0,
+      40, 0, 43, 40,  0, 47, 43, 0,
+      38, 0, 40, 0,   39, 0, 0, 0,
+    ],
+    kickSteps: [0, 3, 6, 10, 12],
+  },
+
+  // Bab 5 Boss (Cthulhu Samudra) — Relentless Cosmic F Minor Drift Phonk
+  5: {
+    bpmNormal: 144,
+    bpmEnraged: 156,
+    normalPattern: [
+      65, 0, 65, 68,  72, 0, 71, 68,
+      65, 0, 68, 72,  73, 0, 72, 68,
+      65, 65, 68, 72, 77, 0, 76, 72,
+      73, 72, 68, 65, 64, 0, 60, 0,
+    ],
+    enragedPattern: [
+      77, 77, 80, 0,  84, 0, 83, 80,
+      77, 0, 80, 84,  85, 0, 84, 80,
+      77, 77, 80, 84, 85, 84, 80, 77,
+      76, 72, 71, 68, 65, 0, 60, 0,
+    ],
+    bassPattern: [
+      41, 0, 0, 41,   0, 41, 0, 44,
+      41, 0, 0, 37,   0, 0, 36, 0,
+      41, 0, 44, 41,  0, 48, 44, 0,
+      37, 0, 41, 0,   36, 0, 0, 0,
+    ],
+    kickSteps: [0, 3, 6, 8, 10, 14],
+  },
+};
 
 class PhonkBossMusic {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
-  private distortionCurve: Float32Array<ArrayBuffer> | null = null;
+  private cowbellBus: WaveShaperNode | null = null;
+  private bassBus: WaveShaperNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private timerId: number | null = null;
   private step = 0;
   private nextNoteTime = 0;
   private running = false;
-  private muted = false;
   private intensity: 'normal' | 'enraged' = 'normal';
-
-  // Dark Phonk minor pentatonic / Phrygian cowbell riff (in MIDI notes, 0 = rest)
-  // Key: F# minor / Phrygian (classic Memphis/Drift Phonk vibe)
-  private readonly patternA = [
-    66, 0, 66, 69,  73, 0, 72, 0,
-    66, 0, 69, 66,  64, 0, 61, 0,
-    66, 0, 66, 69,  73, 76, 73, 0,
-    72, 0, 69, 66,  64, 66, 0, 0,
-  ];
-
-  // Enraged Boss Phase 3 higher-energy cowbell melody
-  private readonly patternB = [
-    73, 0, 73, 76,  78, 0, 76, 73,
-    72, 0, 73, 69,  66, 0, 69, 72,
-    73, 73, 76, 0,  78, 0, 80, 78,
-    76, 73, 72, 69, 66, 0, 61, 0,
-  ];
-
-  // Heavy 808 Bassline MIDI notes (F#1 = 42, D1 = 38, C#1 = 37, E1 = 40)
-  private readonly bassPattern = [
-    42, 0, 0, 42,   0, 0, 42, 0,
-    38, 0, 0, 38,   0, 0, 37, 0,
-    42, 0, 0, 42,   0, 45, 42, 0,
-    40, 0, 0, 38,   37, 0, 0, 0,
-  ];
+  private chapterId = 0;
+  private volume = 0.7;
 
   private midiToFreq(midi: number): number {
     return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  private getActiveTrack(): BossPhonkTrack {
+    return BOSS_PHONK_TRACKS[this.chapterId] ?? BOSS_PHONK_TRACKS[0];
   }
 
   private ensureAudio(): AudioContext | null {
@@ -55,17 +198,28 @@ class PhonkBossMusic {
       this.masterGain.gain.value = this.getTargetGain();
       this.masterGain.connect(this.ctx.destination);
 
-      // Soft-clipping overdrive curve for crunchy phonk 808 & cowbell saturation
+      // Shared soft-clipping overdrive curve (reused across all notes to avoid per-note WaveShaper allocations)
       const samples = 256;
       const curve = new Float32Array(new ArrayBuffer(samples * 4));
       for (let i = 0; i < samples; i++) {
         const x = (i * 2) / samples - 1;
         curve[i] = Math.tanh(x * 3.4);
       }
-      this.distortionCurve = curve;
+
+      this.cowbellBus = this.ctx.createWaveShaper();
+      this.cowbellBus.curve = curve;
+      this.cowbellBus.connect(this.masterGain);
+
+      this.bassBus = this.ctx.createWaveShaper();
+      this.bassBus.curve = curve;
+      const bassLp = this.ctx.createBiquadFilter();
+      bassLp.type = 'lowpass';
+      bassLp.frequency.value = 340;
+      this.bassBus.connect(bassLp);
+      bassLp.connect(this.masterGain);
 
       // Pre-generate crisp white noise buffer for snare & hi-hats
-      const bufSize = this.ctx.sampleRate * 0.25;
+      const bufSize = Math.floor(this.ctx.sampleRate * 0.25);
       const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < bufSize; i++) {
@@ -82,10 +236,9 @@ class PhonkBossMusic {
 
   private triggerCowbell(time: number, midi: number) {
     const ctx = this.ctx;
-    if (!ctx || !this.masterGain) return;
+    if (!ctx || !this.cowbellBus) return;
 
     const baseFreq = this.midiToFreq(midi);
-    // Iconic 808 cowbell = 2 detuned square waves at ratio ~1.48 + sharp bandpass
     const osc1 = ctx.createOscillator();
     const osc2 = ctx.createOscillator();
     osc1.type = 'square';
@@ -98,9 +251,6 @@ class PhonkBossMusic {
     filter.frequency.setValueAtTime(baseFreq * 2.1, time);
     filter.Q.setValueAtTime(2.6, time);
 
-    const shaper = ctx.createWaveShaper();
-    if (this.distortionCurve) shaper.curve = this.distortionCurve;
-
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.001, time);
     gain.gain.linearRampToValueAtTime(0.24, time + 0.005);
@@ -108,9 +258,8 @@ class PhonkBossMusic {
 
     osc1.connect(filter);
     osc2.connect(filter);
-    filter.connect(shaper);
-    shaper.connect(gain);
-    gain.connect(this.masterGain);
+    filter.connect(gain);
+    gain.connect(this.cowbellBus);
 
     osc1.start(time);
     osc2.start(time);
@@ -120,31 +269,21 @@ class PhonkBossMusic {
 
   private trigger808Bass(time: number, midi: number) {
     const ctx = this.ctx;
-    if (!ctx || !this.masterGain) return;
+    if (!ctx || !this.bassBus) return;
 
     const freq = this.midiToFreq(midi);
     const osc = ctx.createOscillator();
     osc.type = 'triangle';
-    // Classic 808 pitch-punch glide
     osc.frequency.setValueAtTime(freq * 1.5, time);
     osc.frequency.exponentialRampToValueAtTime(freq, time + 0.045);
-
-    const shaper = ctx.createWaveShaper();
-    if (this.distortionCurve) shaper.curve = this.distortionCurve;
-
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(340, time);
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.001, time);
     gain.gain.linearRampToValueAtTime(0.46, time + 0.01);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.34);
 
-    osc.connect(shaper);
-    shaper.connect(lowpass);
-    lowpass.connect(gain);
-    gain.connect(this.masterGain);
+    osc.connect(gain);
+    gain.connect(this.bassBus);
 
     osc.start(time);
     osc.stop(time + 0.36);
@@ -173,7 +312,6 @@ class PhonkBossMusic {
     const ctx = this.ctx;
     if (!ctx || !this.masterGain || !this.noiseBuffer) return;
 
-    // Noise snap
     const noise = ctx.createBufferSource();
     noise.buffer = this.noiseBuffer;
 
@@ -191,7 +329,6 @@ class PhonkBossMusic {
     noise.start(time);
     noise.stop(time + 0.14);
 
-    // Body thump
     const osc = ctx.createOscillator();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(220, time);
@@ -230,38 +367,37 @@ class PhonkBossMusic {
   }
 
   private scheduleStep(stepIdx: number, time: number) {
+    const track = this.getActiveTrack();
     const idx = stepIdx % 32;
     const sub = stepIdx % 16;
 
-    // Cowbell melody
-    const melody = this.intensity === 'enraged' ? this.patternB : this.patternA;
+    const melody = this.intensity === 'enraged' ? track.enragedPattern : track.normalPattern;
     const note = melody[idx];
     if (note > 0) {
       this.triggerCowbell(time, note);
     }
 
-    // Distorted 808 sub-bass
-    const bass = this.bassPattern[idx];
+    const bass = track.bassPattern[idx];
     if (bass > 0) {
       this.trigger808Bass(time, bass);
     }
 
-    // Punchy Phonk Kick pattern
-    if (sub === 0 || sub === 3 || sub === 6 || sub === 10 || (this.intensity === 'enraged' && sub === 14)) {
+    if (
+      track.kickSteps.includes(sub) ||
+      (this.intensity === 'enraged' && sub === 14 && !track.kickSteps.includes(14))
+    ) {
       this.triggerKick(time);
     }
 
-    // Hard Snare / Clap on beats 2 & 4 (steps 4 & 12)
     if (sub === 4 || sub === 12) {
       this.triggerSnare(time);
     }
 
-    // Fast Trap/Phonk Hi-Hat Groove + 32nd-note roll at end of bar
     if (sub % 2 === 0 || sub === 11 || sub === 15) {
       this.triggerHiHat(time, sub % 4 === 0);
     }
     if (sub === 14 || (this.intensity === 'enraged' && sub === 7)) {
-      const bpm = this.intensity === 'enraged' ? 146 : 136;
+      const bpm = this.intensity === 'enraged' ? track.bpmEnraged : track.bpmNormal;
       const stepSec = 60 / bpm / 4;
       this.triggerHiHat(time + stepSec * 0.5, false);
     }
@@ -271,17 +407,16 @@ class PhonkBossMusic {
     const ctx = this.ctx;
     if (!this.running || !ctx) return;
 
-    const bpm = this.intensity === 'enraged' ? 146 : 136;
+    const track = this.getActiveTrack();
+    const bpm = this.intensity === 'enraged' ? track.bpmEnraged : track.bpmNormal;
     const secondsPer16th = 60 / bpm / 4;
 
-    while (this.nextNoteTime < ctx.currentTime + 0.12) {
+    while (this.nextNoteTime < ctx.currentTime + 0.15) {
       this.scheduleStep(this.step, this.nextNoteTime);
       this.nextNoteTime += secondsPer16th;
       this.step += 1;
     }
   };
-
-  private volume = 0.7;
 
   private getTargetGain(): number {
     return Math.max(0.15, Math.min(1, this.volume)) * 0.42;
@@ -296,8 +431,16 @@ class PhonkBossMusic {
     }
   }
 
-  start(intensity: 'normal' | 'enraged' = 'normal') {
+  start(intensity: 'normal' | 'enraged' = 'normal', chapterId?: number) {
     this.intensity = intensity;
+    if (typeof chapterId === 'number') {
+      const nextCh = BOSS_PHONK_TRACKS[chapterId] ? chapterId : 0;
+      if (this.chapterId !== nextCh) {
+        this.chapterId = nextCh;
+        this.step = 0;
+      }
+    }
+
     const ctx = this.ensureAudio();
     if (!ctx) return;
 
@@ -311,7 +454,7 @@ class PhonkBossMusic {
     this.running = true;
     this.step = 0;
     this.nextNoteTime = ctx.currentTime + 0.05;
-    this.timerId = window.setInterval(this.scheduler, 30);
+    this.timerId = window.setInterval(this.scheduler, 50);
   }
 
   setIntensity(intensity: 'normal' | 'enraged') {
@@ -319,7 +462,6 @@ class PhonkBossMusic {
   }
 
   setMuted(_muted: boolean) {
-    // Music cannot be disabled; use setVolume() via Settings instead.
     if (this.ctx && this.masterGain && this.running) {
       const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);

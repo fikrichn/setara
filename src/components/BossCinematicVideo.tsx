@@ -150,7 +150,7 @@ export const BossCinematicVideo: React.FC<BossCinematicVideoProps> = ({
         {
           kicker: 'Pertarungan Dimulai!',
           title: `Kibo vs ${boss.name}`,
-          subtitle: `Taklukkan ${boss.phases.length} HP ${boss.name} menggunakan kekuatan pindah ruas!`,
+          subtitle: `Taklukkan ${boss.gimmick === 'heal_once' ? 5 : boss.phases.length} HP ${boss.name} menggunakan kekuatan pindah ruas!`,
         },
       ];
     }
@@ -415,8 +415,8 @@ export const BossCinematicVideo: React.FC<BossCinematicVideoProps> = ({
                   className="relative"
                 >
                   <div
-                    className="absolute inset-0 -m-6 rounded-full blur-2xl opacity-75"
-                    style={{ background: theme.glow }}
+                    className="absolute inset-0 -m-6 rounded-full opacity-55"
+                    style={{ background: `radial-gradient(circle, ${theme.glow} 0%, transparent 72%)` }}
                     aria-hidden="true"
                   />
                   <div className="relative brightness-0 contrast-200 opacity-90 drop-shadow-[0_0_24px_rgba(255,255,255,0.6)]">

@@ -32,11 +32,12 @@
   text-wrap: balance;
 }
 
-/* Soothing Kid-Friendly Tropical Beach & Ocean Canvas Background */
-.game-canvas-bg {
+/* Per-Chapter Ocean Wallpapers Following Blue Color Theory */
+.game-canvas-bg,
+.game-canvas-ch-0 {
   background:
-    radial-gradient(circle at 15% 8%, rgba(254, 240, 138, 0.55), transparent 36%),
-    radial-gradient(circle at 86% 18%, rgba(255, 255, 255, 0.5), transparent 34%),
+    radial-gradient(circle at 15% 8%, rgba(254, 240, 138, 0.52), transparent 36%),
+    radial-gradient(circle at 86% 18%, rgba(255, 255, 255, 0.48), transparent 34%),
     linear-gradient(
       180deg,
       #DDF5FF 0%,
@@ -45,6 +46,82 @@
       #4AC1E8 80%,
       #F7DEAA 96%,
       #F2CE8A 100%
+    );
+}
+
+/* Bab 1: Cerulean Pirate Cove — sunlit golden-blue breeze */
+.game-canvas-ch-1 {
+  background:
+    radial-gradient(circle at 82% 10%, rgba(253, 224, 71, 0.45), transparent 36%),
+    radial-gradient(circle at 18% 22%, rgba(224, 242, 254, 0.6), transparent 34%),
+    linear-gradient(
+      180deg,
+      #D8F2FF 0%,
+      #A5E1FF 30%,
+      #38BDF8 62%,
+      #0284C7 82%,
+      #EAD09A 97%,
+      #DFBE7F 100%
+    );
+}
+
+/* Bab 2: Seafoam Turquoise Treasure Bay — jewel aqua-cyan tones */
+.game-canvas-ch-2 {
+  background:
+    radial-gradient(circle at 22% 12%, rgba(204, 251, 241, 0.68), transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(254, 240, 138, 0.36), transparent 34%),
+    linear-gradient(
+      180deg,
+      #DCFAF6 0%,
+      #B5F3EC 30%,
+      #5EEAD4 60%,
+      #0891B2 82%,
+      #155E75 100%
+    );
+}
+
+/* Bab 3: Calm Sapphire Misty Lagoon — cool periwinkle-sapphire blues */
+.game-canvas-ch-3 {
+  background:
+    radial-gradient(circle at 20% 14%, rgba(224, 231, 255, 0.65), transparent 40%),
+    radial-gradient(circle at 78% 16%, rgba(186, 230, 253, 0.52), transparent 36%),
+    linear-gradient(
+      180deg,
+      #E0EEFF 0%,
+      #BFDBFE 32%,
+      #60A5FA 64%,
+      #2563EB 84%,
+      #1E40AF 100%
+    );
+}
+
+/* Bab 4: Royal Steel-Cobalt Reef — deep ocean blue harmony */
+.game-canvas-ch-4 {
+  background:
+    radial-gradient(circle at 84% 12%, rgba(186, 230, 253, 0.55), transparent 36%),
+    radial-gradient(circle at 18% 24%, rgba(147, 197, 253, 0.42), transparent 38%),
+    linear-gradient(
+      180deg,
+      #D6ECFF 0%,
+      #9CCFFF 30%,
+      #3B82F6 62%,
+      #1D4ED8 82%,
+      #0F295C 100%
+    );
+}
+
+/* Bab 5: Twilight Indigo-Sapphire Cosmic Sea — vibrant blue-indigo abyss */
+.game-canvas-ch-5 {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(165, 180, 252, 0.48), transparent 38%),
+    radial-gradient(circle at 82% 20%, rgba(103, 232, 249, 0.35), transparent 34%),
+    linear-gradient(
+      180deg,
+      #DCE4FF 0%,
+      #A5B4FC 30%,
+      #4F70E8 62%,
+      #3730A3 83%,
+      #1E1B4B 100%
     );
 }
 
@@ -139,50 +216,52 @@
   cursor: pointer;
 }
 
-/* Tactile carved tile depth */
+/* Tactile carved tile depth (lightweight crisp elevation for low-end GPUs) */
 .tile-shadow-pos {
-  box-shadow: 0 4px 0 0 #094D46, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 4px 0 0 #094D46;
 }
 .tile-shadow-pos:active {
-  box-shadow: 0 1px 0 0 #094D46, 0 3px 8px -2px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 0 0 #094D46;
 }
 
 .tile-shadow-neg {
-  box-shadow: 0 4px 0 0 #7F1D1D, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 4px 0 0 #7F1D1D;
 }
 .tile-shadow-neg:active {
-  box-shadow: 0 1px 0 0 #7F1D1D, 0 3px 8px -2px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 0 0 #7F1D1D;
 }
 
 .tile-shadow-var {
-  box-shadow: 0 4px 0 0 #92400E, 0 8px 18px -4px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 4px 0 0 #92400E;
 }
 .tile-shadow-var:active {
-  box-shadow: 0 1px 0 0 #92400E, 0 3px 8px -2px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 1px 0 0 #92400E;
 }
 
 .tile-shadow-group {
-  box-shadow: 0 4px 0 0 #172554, 0 8px 16px -4px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 4px 0 0 #172554;
 }
 
 .pb-safe {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
-/* Smooth GPU-only animations */
+/* Smooth GPU-only animations (no box-shadow/filter repaints for Helio P35 smoothness) */
 @keyframes hintGlow {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.95);
+    opacity: 1;
   }
   50% {
-    transform: scale(1.04);
-    box-shadow: 0 0 0 7px rgba(251, 191, 36, 0.42);
+    transform: scale(1.045);
+    opacity: 0.92;
   }
 }
 
 .animate-hint-ring {
   animation: hintGlow 1.25s ease-in-out infinite;
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.9);
+  will-change: transform, opacity;
 }
 
 @keyframes popIn {
@@ -283,16 +362,92 @@
   animation: shockwaveRing 550ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Gentle Ocean Wave Drift */
+/* Gentle Ocean Wave Drift & Backdrop Motion (GPU transform only) */
 @keyframes waveSway {
-  0%, 100% { transform: translateX(0px); }
-  50% { transform: translateX(-22px); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-22px, 0, 0); }
 }
 .anime-wave-slow {
   animation: waveSway 7s ease-in-out infinite;
+  will-change: transform;
 }
 .anime-wave-mid {
   animation: waveSway 4.8s ease-in-out infinite reverse;
+  will-change: transform;
+}
+@keyframes waveSwayFast {
+  0%, 100% { transform: translate3d(-10px, 0, 0); }
+  50% { transform: translate3d(16px, -2px, 0); }
+}
+.anime-wave-crest {
+  animation: waveSwayFast 3.8s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes cloudDrift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(26px, -2px, 0); }
+}
+.anime-cloud-drift {
+  animation: cloudDrift 11s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes oceanSwim {
+  0%, 100% { transform: translate3d(-12px, 0, 0) rotate(-1.5deg); }
+  50% { transform: translate3d(28px, -6px, 0) rotate(2deg); }
+}
+.anime-ocean-swim {
+  animation: oceanSwim 7.5s ease-in-out infinite;
+  will-change: transform;
+}
+.anime-ocean-swim-rev {
+  animation: oceanSwim 8.6s ease-in-out infinite reverse;
+  will-change: transform;
+}
+@keyframes lobbyFloat {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -5px, 0); }
+}
+.anime-lobby-float {
+  animation: lobbyFloat 3.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Completed stage hover animation on TreasureMap */
+.stage-completed-card {
+  transition: transform 200ms cubic-bezier(0.22, 1.25, 0.36, 1), border-color 180ms ease;
+}
+.stage-completed-card:hover {
+  transform: translate3d(0, -4px, 0) scale(1.025);
+  border-color: #F59E0B;
+}
+.stage-completed-card .completed-star-icon {
+  transition: transform 220ms cubic-bezier(0.22, 1.35, 0.36, 1);
+}
+.stage-completed-card:hover .completed-star-icon {
+  transform: scale(1.22) rotate(-10deg);
+}
+.stage-completed-card .completed-pill {
+  transition: transform 200ms cubic-bezier(0.22, 1.3, 0.36, 1), background-color 180ms ease;
+}
+.stage-completed-card:hover .completed-pill {
+  transform: scale(1.08);
+  background-color: #FEF08A;
+}
+
+.backdrop-paused *,
+.backdrop-paused,
+.is-dragging .anime-wave-slow,
+.is-dragging .anime-wave-mid,
+.is-dragging .anime-wave-crest,
+.is-dragging .anime-cloud-drift,
+.is-dragging .anime-ocean-swim,
+.is-dragging .anime-kibo-breathe,
+.is-dragging .animate-hint-ring,
+.is-dragging .animate-kibo-waddle,
+.is-dragging .cosmic-vortex,
+.is-dragging .cosmic-star-twinkle,
+.is-dragging .cosmic-meteor {
+  animation-play-state: paused !important;
 }
 
 /* Anime Skeletal Keyframes for Kibo & Bosses */
@@ -650,14 +805,15 @@
     0 12px 28px rgba(12, 54, 80, 0.22);
 }
 
-/* Bab 4 Orca Heal Pulse */
+/* Bab 4 Orca Heal Pulse (compositor-only) */
 @keyframes bossHealGlow {
-  0% { transform: scale(1); box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
-  35% { transform: scale(1.03); box-shadow: 0 0 32px rgba(52, 211, 153, 0.85); }
-  100% { transform: scale(1); box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
+  0% { transform: scale(1); opacity: 0.95; }
+  35% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
 }
 .animate-boss-heal {
   animation: bossHealGlow 950ms cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: 0 0 22px rgba(52, 211, 153, 0.65);
 }
 
 /* Bab 5 Cthulhu 1-HP Cosmic Mode */
@@ -737,6 +893,86 @@
   transform-origin: center;
 }
 
+/* Card pick-up hang / pendulum sway from finger pinch point (zero-reflow GPU transform) */
+@keyframes cardHangSway {
+  0% { transform: scale(0.92) rotate(0deg); }
+  22% { transform: scale(1.08) rotate(-4deg); }
+  48% { transform: scale(1.05) rotate(3.5deg); }
+  74% { transform: scale(1.05) rotate(-2.5deg); }
+  100% { transform: scale(1.05) rotate(2deg); }
+}
+@keyframes cardHangLoop {
+  0%, 100% { transform: scale(1.05) rotate(-2.5deg); }
+  50% { transform: scale(1.05) rotate(2.5deg); }
+}
+.card-pick-hang {
+  transform-origin: 50% 8%;
+  animation:
+    cardHangSway 320ms cubic-bezier(0.22, 1.3, 0.36, 1) forwards,
+    cardHangLoop 1.5s ease-in-out 320ms infinite;
+  will-change: transform;
+}
+
+/* TreasureMap Island-Hopping Chapter Transitions */
+@keyframes islandSailNext {
+  0% {
+    opacity: 0;
+    transform: translate3d(34px, 6px, 0) scale(0.975);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes islandSailPrev {
+  0% {
+    opacity: 0;
+    transform: translate3d(-34px, 6px, 0) scale(0.975);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.island-sail-next {
+  animation: islandSailNext 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.island-sail-prev {
+  animation: islandSailPrev 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scattered Beach Easter Egg Object Pop */
+@keyframes easterEggPop {
+  0% { transform: scale(1) rotate(0deg); }
+  30% { transform: scale(1.32) translateY(-8px) rotate(-10deg); }
+  65% { transform: scale(0.94) translateY(1px) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.easter-egg-pop {
+  animation: easterEggPop 460ms cubic-bezier(0.22, 1.35, 0.36, 1);
+}
+
+/* Lively Speech Bubble Entrance for Kibo & Bosses (GPU transform + opacity only) */
+@keyframes speechBubblePop {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0) scale(0.92);
+  }
+  65% {
+    opacity: 1;
+    transform: translate3d(0, -1px, 0) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.speech-bubble-pop {
+  animation: speechBubblePop 290ms cubic-bezier(0.22, 1.25, 0.36, 1) forwards;
+  transform-origin: left center;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-hint-ring,
   .animate-pop-in,
@@ -748,6 +984,11 @@
   .animate-shockwave,
   .anime-wave-slow,
   .anime-wave-mid,
+  .anime-wave-crest,
+  .anime-cloud-drift,
+  .anime-ocean-swim,
+  .anime-ocean-swim-rev,
+  .anime-lobby-float,
   .anime-kibo-breathe,
   .anime-kibo-sob,
   .anime-tear-l,
@@ -792,7 +1033,12 @@
   .cosmic-vortex,
   .anime-kibo-dizzy,
   .anime-kibo-zzz,
-  .anime-kibo-note {
+  .anime-kibo-note,
+  .card-pick-hang,
+  .island-sail-next,
+  .island-sail-prev,
+  .easter-egg-pop,
+  .speech-bubble-pop {
     animation: none;
   }
 }

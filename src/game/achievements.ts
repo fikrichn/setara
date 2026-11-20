@@ -9,7 +9,8 @@ export type BadgeIconKey =
   | 'arrow'
   | 'shuffle'
   | 'star'
-  | 'heart';
+  | 'heart'
+  | 'zap';
 
 export type BadgeTone = 'gold' | 'coral' | 'teal' | 'violet' | 'sky' | 'emerald';
 
@@ -42,6 +43,16 @@ export const ACHIEVEMENT_BADGES: BadgeDef[] = [
     tone: 'gold',
     target: 10,
     getCurrent: (p) => p.stats.flawlessStageIds.length,
+  },
+  {
+    id: 'kilat_speedster',
+    title: 'Kilat Speedster',
+    description: 'Raih 5 Medali Speedster dengan menuntaskan stage sebelum target waktu',
+    kiboPraise: 'Wuuush! Cepat dan tepat bagai lumba-lumba di mode Speed Run!',
+    icon: 'zap',
+    tone: 'sky',
+    target: 5,
+    getCurrent: (p) => p.stats.speedsterCount,
   },
   {
     id: 'si_pantang_menyerah',
@@ -102,6 +113,27 @@ export const ACHIEVEMENT_BADGES: BadgeDef[] = [
     tone: 'gold',
     target: 30,
     getCurrent: (p) => Object.values(p.completed).reduce((sum, item) => sum + item.stars, 0),
+  },
+  {
+    id: 'pejuang_harian',
+    title: 'Pejuang Misi Harian',
+    description: 'Kumpulkan 30 poin bonus dari Misi Harian (5 poin/misi) bersama Kibo',
+    kiboPraise: 'Konsisten setiap hari bikin kemampuan aljabarmu melesat jauh!',
+    icon: 'sparkles',
+    tone: 'teal',
+    target: 30,
+    getCurrent: (p) => p.daily?.bonusPoints ?? 0,
+  },
+  {
+    id: 'setia_7_hari',
+    title: 'Sahabat Abadi 7 Hari',
+    description: 'Selesaikan semua Misi Harian 7 hari berturut-turut untuk membuka Ending Spesial Kibo',
+    kiboPraise: '7 HARI BERTURUT-TURUT! Kamu sahabat sejati Kibo & Ending Spesial terbuka!',
+    icon: 'crown',
+    tone: 'violet',
+    target: 7,
+    getCurrent: (p) =>
+      p.daily?.specialEndingUnlocked ? 7 : Math.min(7, p.daily?.streakDays ?? 0),
   },
   {
     id: 'legenda_samudra',

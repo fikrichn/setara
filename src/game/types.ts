@@ -85,6 +85,9 @@ export interface KiboBossDialogues {
   tapLines: string[];
   gimmickAlert: string;
   hitCheer: string;
+  lowTimeAlert: string;
+  lowTimeCritical: string;
+  lowTimeTapLines: string[];
   victoryPreTos: string;
   victoryPostTos: string;
   defeatEncourage: string;
@@ -102,7 +105,6 @@ export interface BossConfig {
   penaltySeconds?: number;
   healLine?: string;
   enrageGimmickLine?: string;
-  artwork: string;
   introLine: string;
   tauntLines: string[];
   hitLines: string[];
@@ -133,13 +135,14 @@ export interface ChapterDef {
   title: string;
   subtitle: string;
   focusRule: string;
-  artwork?: string;
   levels: LevelDef[];
 }
 
 export interface LevelProgress {
   stars: number; // 1..3
   bestMoves: number;
+  bestTimeSec?: number;
+  speedster?: boolean;
 }
 
 export interface PlayerStats {
@@ -147,6 +150,21 @@ export interface PlayerStats {
   retryCount: number; // Total stage retries / replays
   totalTransposes: number; // Total pindah ruas across '='
   noHintBossWins: number; // Bosses defeated without using Bantuan
+  speedsterCount: number; // Stages completed under Speed Run target time
+}
+
+export interface DailyMissionProgress {
+  dateKey: string; // YYYY-MM-DD local date
+  transposesToday: number;
+  stagesToday: number;
+  practiceToday: number;
+  flawlessToday: number;
+  claimedIds: string[];
+  bonusPoints: number;
+  streakDays: number;
+  lastCompletedDateKey: string | null;
+  specialEndingUnlocked?: boolean;
+  specialEndingSeen?: boolean;
 }
 
 export interface ProgressStore {
@@ -155,5 +173,7 @@ export interface ProgressStore {
   soundEnabled: boolean;
   musicVolume: number; // 0.15 .. 1.0 (cannot be disabled)
   sfxVolume: number; // 0 .. 1.0
+  speedRunEnabled?: boolean;
   stats: PlayerStats;
+  daily: DailyMissionProgress;
 }

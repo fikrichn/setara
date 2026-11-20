@@ -11,6 +11,7 @@ import {
   Shuffle,
   Sparkles,
   Star,
+  Zap,
 } from 'lucide-react';
 import {
   BadgeIconKey,
@@ -82,6 +83,8 @@ function renderBadgeIcon(icon: BadgeIconKey, className = 'w-5 h-5') {
       return <Star className={className} aria-hidden="true" />;
     case 'heart':
       return <Heart className={className} aria-hidden="true" />;
+    case 'zap':
+      return <Zap className={className} aria-hidden="true" />;
   }
 }
 
@@ -126,11 +129,11 @@ export const ProfileBadgesCard: React.FC<ProfileBadgesCardProps> = ({ progress }
           <span className="px-2.5 py-1 rounded-xl bg-[#EBF8FF] border border-[#BAE6FD] text-[#0369A1]">
             {completedStages} Stage
           </span>
-          <span className="px-2.5 py-1 rounded-xl bg-[#FFFBEB] border border-[#FDE68A] text-[#B45309]">
-            {progress.stats.flawlessStageIds.length} Tanpa Salah
+          <span className="px-2.5 py-1 rounded-xl bg-[#FEF9C3] border border-[#FDE047] text-[#854D0E]">
+            {progress.stats.speedsterCount} Speedster
           </span>
-          <span className="px-2.5 py-1 rounded-xl bg-[#FFF1F2] border border-[#FECDD3] text-[#BE123C]">
-            {progress.stats.retryCount}× Ulang
+          <span className="px-2.5 py-1 rounded-xl bg-[#ECFDF5] border border-[#A7F3D0] text-[#047857]">
+            {progress.daily?.bonusPoints ?? 0} Poin Harian
           </span>
         </div>
       </div>

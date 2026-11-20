@@ -1,8 +1,6 @@
 import React from 'react';
-import { motion } from 'motion/react';
 import { Film, Home, LogOut, Music, Play, Settings, Volume2, X } from 'lucide-react';
 import { sound } from '../game/sound';
-import { AnimatedKibo } from './AnimatedKibo';
 
 interface SettingsModalProps {
   open: boolean;
@@ -36,17 +34,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/60 backdrop-blur-xs p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/78 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.88, y: 18 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-        className="w-full max-w-md rounded-3xl game-panel p-5 sm:p-6 shadow-2xl"
-      >
+      <div className="w-full max-w-md rounded-3xl game-panel p-5 sm:p-6 shadow-xl animate-pop-in">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-[#BAE6FD]">
           <div className="flex items-center gap-2.5">
@@ -168,10 +161,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              sound.playKiboCry();
-              onRequestExit();
-            }}
+            onClick={onRequestExit}
             className="game-btn-coral w-full min-h-[48px] px-4 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
           >
             <LogOut className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -190,82 +180,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>Lanjut Bermain</span>
           </button>
         </div>
-      </motion.div>
-    </div>
-  );
-};
-
-interface ExitConfirmModalProps {
-  open: boolean;
-  onStay: () => void;
-  onConfirmExit: () => void;
-}
-
-export const ExitConfirmModal: React.FC<ExitConfirmModalProps> = ({
-  open,
-  onStay,
-  onConfirmExit,
-}) => {
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#09324A]/70 backdrop-blur-xs p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="exit-kibo-title"
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.84, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 24 }}
-        className="w-full max-w-md rounded-3xl game-panel border-2 border-[#7DD3FC] p-6 text-center shadow-2xl"
-      >
-        <div className="flex flex-col items-center">
-          <AnimatedKibo
-            size="xl"
-            mood="crying"
-            interactive={false}
-            className="border-3 border-[#7DD3FC] shadow-xl"
-          />
-
-          <h2
-            id="exit-kibo-title"
-            className="mt-4 font-display text-2xl sm:text-3xl font-extrabold text-[#0D354C]"
-          >
-            Hiks... Mau Keluar?
-          </h2>
-
-          <div className="mt-2.5 rounded-2xl bg-[#EBF8FF] border border-[#BAE6FD] px-4 py-3 text-sm text-[#1E4E68] leading-relaxed">
-            <strong className="text-[#0284C7]">Kibo:</strong> “Jangan pergi dulu dong... hiks...
-            Nanti Kibo sendirian main pasir di pantai tanpa kamu...”
-          </div>
-
-          <div className="mt-5 w-full flex flex-col sm:flex-row gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                sound.playKiboGiggle();
-                onStay();
-              }}
-              className="game-btn-gold flex-1 min-h-[50px] px-4 rounded-2xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
-            >
-              Tetap Main Sama Kibo!
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                sound.playPickup();
-                onConfirmExit();
-              }}
-              className="game-btn-coral sm:w-auto min-h-[50px] px-5 rounded-2xl text-sm font-extrabold whitespace-nowrap cursor-pointer"
-            >
-              Ya, Keluar
-            </button>
-          </div>
-        </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

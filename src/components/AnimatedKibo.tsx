@@ -46,7 +46,7 @@ interface AnimatedKiboProps {
   className?: string;
 }
 
-export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
+export const AnimatedKibo: React.FC<AnimatedKiboProps> = React.memo(({
   mood = 'idle',
   reaction = 'none',
   size = 'md',
@@ -767,4 +767,6 @@ export const AnimatedKibo: React.FC<AnimatedKiboProps> = ({
       <div className="w-full h-full rounded-[inherit] overflow-hidden">{renderSvg()}</div>
     </motion.button>
   );
-};
+});
+
+AnimatedKibo.displayName = 'AnimatedKibo';
