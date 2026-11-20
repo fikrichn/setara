@@ -1,0 +1,12 @@
+{
+  "appId": "id.setara.aljabar",
+  "appName": "Setara",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#0B211A",
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
