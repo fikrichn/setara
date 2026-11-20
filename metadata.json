@@ -1,8 +1,6 @@
 {
-  "name": "Remix Setara — Permainan Pindah Ruas Aljabar",
+  "name": "Setara — Permainan Pindah Ruas Aljabar",
   "description": "Permainan belajar aljabar dan pindah ruas gratis untuk anak Indonesia, dapat dipasang di Android dan dimainkan tanpa internet.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
